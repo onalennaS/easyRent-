@@ -623,9 +623,9 @@ if (isset($_GET['success'])) {
                 <div class="profile-avatar">
                     <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
                 </div>
-                <a href="#" id="logoutLink" class="logout-link">
-  <i class="fas fa-sign-out-alt"></i>
-</a>
+                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
             </div>
         </div>
     </nav>
@@ -805,49 +805,51 @@ if (isset($_GET['success'])) {
                     </div>
 
                     <!-- Pricing -->
-                    <div class="form-section">
-                        <h2 class="section-title">
-                            <i class="fas fa-dollar-sign"></i>
-                            Pricing
-                        </h2>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="rent_amount">
-                                    Monthly Rent <span class="required">*</span>
-                                </label>
-                                <div class="input-icon">
-                                    <i class="fas fa-dollar-sign"></i>
-                                    <input type="number" id="rent_amount" name="rent_amount" class="form-input" 
-                                           placeholder="e.g., 1200" min="0" step="0.01" required>
-                                </div>
-                            </div>
+<div class="form-section">
+    <h2 class="section-title">
+        <i class="fas fa-random"></i> <!-- optional: change icon if needed -->
+        Pricing
+    </h2>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-label" for="rent_amount">
+                Monthly Rent <span class="required">*</span>
+            </label>
+            <div class="input-icon">
+                <span class="currency-symbol">R</span>
+                <input type="number" id="rent_amount" name="rent_amount" class="form-input" 
+                       placeholder="e.g., 1200" min="0" step="0.01" required>
+            </div>
+        </div>
+    </div>
+</div>
+
                             
                             <div class="form-group">
-                                <label class="form-label" for="deposit_amount">
-                                    Security Deposit
-                                </label>
-                                <div class="input-icon">
-                                    <i class="fas fa-dollar-sign"></i>
-                                    <input type="number" id="deposit_amount" name="deposit_amount" class="form-input" 
-                                           placeholder="e.g., 1200" min="0" step="0.01">
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label" for="lease_duration_months">
-                                    Lease Duration (Months)
-                                </label>
-                                <select id="lease_duration_months" name="lease_duration_months" class="form-select">
-                                    <option value="12">12 Months</option>
-                                    <option value="6">6 Months</option>
-                                    <option value="24">24 Months</option>
-                                    <option value="36">36 Months</option>
-                                    <option value="0">Month-to-Month</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
+    <label class="form-label" for="deposit_amount">
+        Security Deposit
+    </label>
+    <div class="input-icon">
+        <span class="currency-symbol">R</span>
+        <input type="number" id="deposit_amount" name="deposit_amount" class="form-input" 
+               placeholder="e.g., 1200" min="0" step="0.01">
+    </div>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="lease_duration_months">
+        Lease Duration (Months)
+    </label>
+    <select id="lease_duration_months" name="lease_duration_months" class="form-select">
+        <option value="12">12 Months</option>
+        <option value="6">6 Months</option>
+        <option value="24">24 Months</option>
+        <option value="36">36 Months</option>
+        <option value="0">Month-to-Month</option>
+    </select>
+</div>
+
 
                     <!-- Features & Amenities -->
                     <div class="form-section">

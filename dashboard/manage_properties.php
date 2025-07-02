@@ -1073,7 +1073,7 @@ $stats = mysqli_fetch_assoc($stats_result);
                                     </td>
                                     <td><?php echo htmlspecialchars($property['address']); ?></td>
                                     <td><?php echo ucfirst(htmlspecialchars($property['property_type'])); ?></td>
-                                    <td>$<?php echo number_format($property['rent_amount'], 2); ?></td>
+                                    <td>R<?php echo number_format($property['rent_amount'], 2); ?></td>
                                     <td>
                                         <?php if ($property['is_available']): ?>
                                             <span class="status-badge available">Available</span>

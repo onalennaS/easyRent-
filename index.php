@@ -432,148 +432,179 @@ if ($isLoggedIn && $userRole === 'admin') {
         </div>
     </nav>
     
-    <!-- Welcome Section for Logged-in Users -->
-    <?php if($isLoggedIn): ?>
-    <section id="welcomeSection" class="pt-20 pb-8">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="welcome-section">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h2 class="text-2xl font-bold text-white mb-2">
-                            <i class="fas fa-home mr-3 text-blue-400"></i>
-                            Welcome back, <?php echo htmlspecialchars($username); ?>!
-                        </h2>
-                        <p class="text-blue-200" id="welcomeMessage">
-                            <?php if($userRole === 'tenant'): ?>
-                                Welcome to your tenant portal! Find your perfect home and manage your rental applications.
-                            <?php else: ?>
-                                Welcome to your landlord portal! Manage your properties and find reliable tenants.
-                            <?php endif; ?>
-                        </p>
-                    </div>
-                    <div class="hidden md:block">
-                        <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" id="dashboardButton" class="btn-primary px-6 py-3 rounded-xl text-white font-semibold">
-                            <i class="fas fa-tachometer-alt mr-2"></i>Go to Dashboard
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
+    
 
-   <!-- Updated Properties Section -->
-<section id="properties" class="py-16 bg-gradient-to-br from-[#1e293b] to-[#0f172a]">
+<!-- Properties Section -->
+<section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800">
   <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-12">
-      <h2 class="text-4xl font-bold text-white mb-4">Available Properties</h2>
-      <p class="text-blue-200">Approved listings ready for rental</p>
+      <h2 class="text-4xl font-bold text-white mb-3">Available Properties</h2>
+      <p class="text-blue-200">Explore our latest approved rental listings</p>
     </div>
-
+<!-- Filter Section -->
+<div class="mb-8">
+  <div class="glass-card rounded-xl p-6">
+    <h3 class="text-xl font-semibold text-white mb-4">
+      <i class="fas fa-filter mr-2"></i>Filter Properties
+    </h3>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <!-- Location Filter -->
+      <div>
+        <label class="block text-sm font-medium text-blue-200 mb-2">Location</label>
+        <input type="text" id="locationFilter" placeholder="Search by location..." 
+               class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+      </div>
+      
+      <!-- Bedrooms Filter -->
+      <div>
+        <label class="block text-sm font-medium text-blue-200 mb-2">Min Bedrooms</label>
+        <select id="bedroomsFilter" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black">
+          <option value="">Any</option>
+          <option value="1">1+</option>
+          <option value="2">2+</option>
+          <option value="3">3+</option>
+          <option value="4">4+</option>
+        </select>
+      </div>
+      
+      <!-- Price Filter -->
+      <div>
+        <label class="block text-sm font-medium text-blue-200 mb-2">Max Price (R)</label>
+        <input type="number" id="maxPriceFilter" placeholder="Max price..." 
+               class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+      </div>
+      
+      <!-- Clear Filters -->
+      <div class="flex items-end">
+        <button onclick="clearFilters()" class="w-full btn-secondary px-4 py-2 rounded-lg text-white font-semibold">
+          <i class="fas fa-times mr-2"></i>Clear Filters
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
     <?php
-    $servername = "localhost";
-    $username_db = "root";
-    $password_db = "";
-    $dbname = "easyrent_db";
+// DB Setup
+$servername = "localhost";
+$username_db = "root";
+$password_db = "";
+$dbname = "easyrent_db";
 
-    try {
-      $conn = new mysqli($servername, $username_db, $password_db, $dbname);
+try {
+    $conn = new mysqli($servername, $username_db, $password_db, $dbname);
+    if ($conn->connect_error) throw new Exception("Connection failed: " . $conn->connect_error);
 
-      if ($conn->connect_error) {
-        throw new Exception("Connection failed: " . $conn->connect_error);
-      }
+    // Build the WHERE clause based on filters
+    $whereConditions = ["p.admin_approved = 1"];
+    $params = [];
+    $types = "";
 
-      $sql = "SELECT p.*, 
-              (SELECT image_url FROM property_images 
-               WHERE property_id = p.id AND is_primary = 1 LIMIT 1) AS main_image
-              FROM properties p
-              WHERE p.admin_approved = 1 
-              ORDER BY p.created_at DESC 
-              LIMIT 12";
+    // Location filter
+    if (!empty($_GET['location'])) {
+        $whereConditions[] = "(p.title LIKE ? OR p.address LIKE ?)";
+        $searchTerm = "%" . $_GET['location'] . "%";
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $types .= "ss";
+    }
 
-      $result = $conn->query($sql);
+    // Bedrooms filter
+    if (!empty($_GET['bedrooms']) && is_numeric($_GET['bedrooms'])) {
+        $whereConditions[] = "p.bedrooms >= ?";
+        $params[] = (int)$_GET['bedrooms'];
+        $types .= "i";
+    }
 
-      if (!$result) {
-        throw new Exception("Query failed: " . $conn->error);
-      }
+    // Price filter
+    if (!empty($_GET['maxPrice']) && is_numeric($_GET['maxPrice'])) {
+        $whereConditions[] = "p.rent_amount <= ?";
+        $params[] = (int)$_GET['maxPrice'];
+        $types .= "i";
+    }
 
-      if ($result->num_rows > 0) {
-        echo '<div class="grid gap-8 sm:grid-cols-10 lg:grid-cols-5 xl:grid-cols-3">';
+    $whereClause = implode(" AND ", $whereConditions);
+    
+    $sql = "SELECT p.*, 
+            (SELECT image_url FROM property_images 
+             WHERE property_id = p.id AND is_primary = 1 LIMIT 1) AS main_image
+            FROM properties p
+            WHERE $whereClause 
+            ORDER BY p.created_at DESC 
+            LIMIT 12";
 
+    $stmt = $conn->prepare($sql);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        echo '<div id="propertiesGrid" class="grid gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">';
+        
         while ($property = $result->fetch_assoc()) {
-          $property_image = '';
-          if (!empty($property['main_image'])) {
-            $property_image = 'uploads/properties/' . htmlspecialchars($property['main_image']);
-          }
+            // Your existing property card HTML code stays the same
+            $property_image = !empty($property['main_image']) ? 'uploads/properties/' . htmlspecialchars($property['main_image']) : '';
+            $rent_amount = isset($property['rent_amount']) ? number_format($property['rent_amount']) : 'N/A';
+            $title = htmlspecialchars($property['title'] ?? 'Untitled Property');
+            $address = htmlspecialchars($property['address'] ?? 'Address not specified');
+            $bedrooms = htmlspecialchars($property['bedrooms'] ?? 'N/A');
+            $bathrooms = htmlspecialchars($property['bathrooms'] ?? 'N/A');
+            $description = htmlspecialchars($property['description'] ?? '');
+            $truncated_description = strlen($description) > 90 ? substr($description, 0, 90) . '...' : $description;
 
-          $rent_amount = isset($property['rent_amount']) ? number_format($property['rent_amount']) : 'N/A';
-          $description = $property['description'] ?? '';
-          $clean_description = htmlspecialchars($description);
-          $truncated_description = strlen($clean_description) > 100 ? substr($clean_description, 0, 100) . '...' : $clean_description;
+            echo '<div class="bg-white rounded-2xl shadow-md hover:shadow-xl transition duration-300 overflow-hidden flex flex-col">';
+            if ($property_image) {
+                echo '<div class="h-48 w-full bg-cover bg-center" style="background-image: url(\'' . $property_image . '\')"></div>';
+            } else {
+                echo '<div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 text-5xl"><i class="fas fa-home"></i></div>';
+            }
 
-          echo '<div class="bg-white rounded-2xl shadow-md hover:shadow-2xl transition duration-300 flex flex-col overflow-hidden">';
-
-          if ($property_image) {
-            echo '<div class="h-52 w-full bg-cover bg-center" style="background-image: url(\'' . $property_image . '\')"></div>';
-          } else {
-            echo '<div class="h-52 w-full bg-gray-200 flex items-center justify-center">';
-            echo '<i class="fas fa-home text-4xl text-gray-400"></i>';
+            echo '<div class="p-5 flex-1 flex flex-col justify-between">';
+            echo '<div>';
+            echo '<span class="inline-block mb-2 text-xs text-green-600 font-semibold uppercase">Available</span>';
+            echo '<h3 class="text-xl font-bold text-gray-800">' . $title . '</h3>';
+            echo '<p class="text-gray-500 text-sm mt-1 flex items-center"><i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>' . $address . '</p>';
+            echo '<div class="flex items-center justify-between mt-3 text-gray-600 text-sm">';
+            echo '<span><i class="fas fa-bed mr-1"></i>' . $bedrooms . ' Beds</span>';
+            echo '<span><i class="fas fa-bath mr-1"></i>' . $bathrooms . ' Baths</span>';
             echo '</div>';
-          }
+            echo '<p class="text-gray-600 text-sm mt-4">' . $truncated_description . '</p>';
+            echo '</div>';
 
-          echo '<div class="p-6 flex flex-col flex-1">';
-          echo '<span class="status-badge">Available</span>';
+            echo '<div class="mt-4 flex items-center justify-between">';
+            echo '<span class="text-blue-600 font-bold text-lg">R' . $rent_amount . '</span>';
+            echo '<a href="' . ($isLoggedIn ? 'dashboard/property_details.php?id=' . $property['id'] : 'auth/register.php') . '" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">';
+            echo '<i class="fas ' . ($isLoggedIn ? 'fa-eye' : 'fa-user-plus') . ' mr-2"></i>' . ($isLoggedIn ? 'View' : 'Sign Up to View') . '</a>';
+            echo '</div>';
 
-          echo '<h3 class="text-xl font-semibold text-gray-800 mb-1">' . htmlspecialchars($property['title'] ?? 'Untitled Property') . '</h3>';
-
-          echo '<p class="text-gray-500 text-sm mb-4 flex items-center">';
-          echo '<i class="fas fa-map-marker-alt mr-2 text-blue-500"></i>';
-          echo htmlspecialchars($property['address'] ?? 'Address not specified');
-          echo '</p>';
-
-          echo '<div class="flex justify-between items-center mb-4">';
-          echo '<div class="flex space-x-4 text-sm text-gray-600">';
-          echo '<span class="flex items-center"><i class="fas fa-bed mr-1"></i>' . htmlspecialchars($property['bedrooms'] ?? 'N/A') . ' Bed</span>';
-          echo '<span class="flex items-center"><i class="fas fa-bath mr-1"></i>' . htmlspecialchars($property['bathrooms'] ?? 'N/A') . ' Bath</span>';
-          echo '</div>';
-          echo '<div class="text-xl font-bold text-blue-600">$' . $rent_amount . '/mo</div>';
-          echo '</div>';
-
-          echo '<p class="text-gray-600 text-sm mb-6">' . $truncated_description . '</p>';
-
-          echo '<a href="' . ($isLoggedIn ? 'dashboard/property_details.php?id=' . $property['id'] : 'auth/register.php') . '" class="inline-flex items-center justify-center px-4 py-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">';
-          echo '<i class="fas ' . ($isLoggedIn ? 'fa-eye' : 'fa-user-plus') . ' mr-2"></i>' . ($isLoggedIn ? 'View Details' : 'Sign Up to View') . '</a>';
-
-          echo '</div>'; // p-6
-          echo '</div>'; // card
-        }
-
-        echo '</div>'; // grid
-      } else {
-        echo '<div class="text-center py-12">';
-        echo '<i class="fas fa-home text-4xl text-gray-300 mb-4"></i>';
-        echo '<h3 class="text-xl font-bold mb-2 text-white">No Approved Properties Found</h3>';
-        echo '<p class="text-gray-300 mb-4">We couldn\'t find any approved properties in the database.</p>';
-
-        $debug_sql = "SELECT COUNT(*) AS total, SUM(admin_approved) AS approved_count FROM properties";
-        $debug_result = $conn->query($debug_sql);
-        if ($debug_result && $debug_row = $debug_result->fetch_assoc()) {
-          echo '<p class="text-sm text-gray-400">Debug: Total: ' . $debug_row['total'] . ', Approved: ' . $debug_row['approved_count'] . '</p>';
+            echo '</div>';
+            echo '</div>';
         }
 
         echo '</div>';
-      }
-
-      $conn->close();
-    } catch (Exception $e) {
-      echo '<div class="bg-red-100 text-red-700 p-4 rounded-lg">';
-      echo '<i class="fas fa-exclamation-triangle mr-2"></i>';
-      echo '<strong>Database Error:</strong> ' . htmlspecialchars($e->getMessage());
-      echo '</div>';
+    } else {
+        echo '<div class="text-center py-16">';
+        echo '<div class="inline-block bg-blue-800 p-6 rounded-full shadow-lg animate-bounce mb-6">';
+        echo '<i class="fas fa-search text-white text-5xl"></i>';
+        echo '</div>';
+        echo '<h3 class="text-2xl font-bold text-white mb-2">No Properties Found</h3>';
+        echo '<p class="text-blue-200 text-sm">Try adjusting your search criteria or clear the filters.</p>';
+        echo '</div>';
     }
-    ?>
+
+    $stmt->close();
+    $conn->close();
+} catch (Exception $e) {
+    echo '<div class="bg-red-100 text-red-700 p-4 rounded-lg mt-6 shadow">';
+    echo '<i class="fas fa-exclamation-triangle mr-2"></i>';
+    echo '<strong>Error:</strong> ' . htmlspecialchars($e->getMessage());
+    echo '</div>';
+}
+?>
   </div>
 </section>
+
 
 
     <!-- About Section -->
@@ -1154,5 +1185,86 @@ const propertiesPerPage = 6;
         loadFiltersFromURL();
     });
     </script>
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup filter event listeners
+    setupFilterEventListeners();
+    
+    // Load filters from URL on page load
+    loadFiltersFromURL();
+});
+
+function setupFilterEventListeners() {
+    document.getElementById('locationFilter').addEventListener('input', debounce(applyFilters, 500));
+    document.getElementById('bedroomsFilter').addEventListener('change', applyFilters);
+    document.getElementById('maxPriceFilter').addEventListener('input', debounce(applyFilters, 500));
+    
+    // Enter key listeners
+    document.getElementById('locationFilter').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') applyFilters();
+    });
+    
+    document.getElementById('maxPriceFilter').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') applyFilters();
+    });
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function applyFilters() {
+    const location = document.getElementById('locationFilter').value.trim();
+    const bedrooms = document.getElementById('bedroomsFilter').value;
+    const maxPrice = document.getElementById('maxPriceFilter').value.trim();
+    
+    // Build URL with filters
+    const url = new URL(window.location.href);
+    url.searchParams.delete('location');
+    url.searchParams.delete('bedrooms');
+    url.searchParams.delete('maxPrice');
+    
+    if (location) url.searchParams.set('location', location);
+    if (bedrooms) url.searchParams.set('bedrooms', bedrooms);
+    if (maxPrice) url.searchParams.set('maxPrice', maxPrice);
+    
+    // Reload page with new filters
+    window.location.href = url.toString();
+}
+
+function clearFilters() {
+    document.getElementById('locationFilter').value = '';
+    document.getElementById('bedroomsFilter').value = '';
+    document.getElementById('maxPriceFilter').value = '';
+    
+    // Remove all filter parameters from URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('location');
+    url.searchParams.delete('bedrooms');
+    url.searchParams.delete('maxPrice');
+    
+    window.location.href = url.toString();
+}
+
+function loadFiltersFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    const location = urlParams.get('location');
+    const bedrooms = urlParams.get('bedrooms');
+    const maxPrice = urlParams.get('maxPrice');
+    
+    if (location) document.getElementById('locationFilter').value = location;
+    if (bedrooms) document.getElementById('bedroomsFilter').value = bedrooms;
+    if (maxPrice) document.getElementById('maxPriceFilter').value = maxPrice;
+}
+</script>
 </body>
 </html>

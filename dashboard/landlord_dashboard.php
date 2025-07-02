@@ -624,6 +624,7 @@ $inquiries_result = mysqli_query($conn, $inquiries_query);
             <ul class="nav-menu">
                 <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
                 <li><a href="my_properties.php">My Properties</a></li>
+                <li><a href="applications.php" class="active">Applications</a></li>
                 <li><a href="add_property.php">Add Property</a></li>
                 <li><a href="maintenance.php">Maintenance</a></li>
                 <li><a href="tenants.php">Tenants</a></li>
@@ -635,9 +636,9 @@ $inquiries_result = mysqli_query($conn, $inquiries_query);
                 <div class="profile-avatar">
                     <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
                 </div>
-                 <a href="#" id="logoutLink" class="logout-link">
-                <i class="fas fa-sign-out-alt"></i>
-            </a>
+                 <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
                
             </div>
         </div>
@@ -685,12 +686,13 @@ $inquiries_result = mysqli_query($conn, $inquiries_query);
             <div class="stat-card income">
                 <div class="stat-header">
                     <div>
-                        <div class="stat-value">$<?php echo number_format($stats['monthly_income']); ?></div>
+                        <div class="stat-value">R<?php echo number_format($stats['monthly_income']); ?></div>
                         <div class="stat-label">Monthly Income</div>
                     </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-dollar-sign"></i>
-                    </div>
+                   <div class="stat-icon">
+    <span class="currency-symbol">R</span>
+</div>
+
                 </div>
             </div>
 
@@ -750,7 +752,7 @@ $inquiries_result = mysqli_query($conn, $inquiries_query);
                                         <?php echo htmlspecialchars($property['address'] ?? 'Address not available'); ?>
                                     </p>
                                     <?php if ($has_rent_amount && isset($property['rent_amount'])): ?>
-                                        <div class="property-price">$<?php echo number_format($property['rent_amount']); ?>/month</div>
+                                        <div class="property-price">R<?php echo number_format($property['rent_amount']); ?>/month</div>
                                     <?php endif; ?>
                                     <div class="property-actions">
                                         <a href="view_property.php?id=<?php echo $property['id']; ?>" class="btn btn-primary">

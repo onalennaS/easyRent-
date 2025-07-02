@@ -573,7 +573,7 @@ function fileExists($path) {
             <div class="flex flex-col items-end">
               <span class="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">Available</span>
               <div class="text-3xl font-bold text-blue-600">
-                $<?php echo number_format($property['rent_amount']); ?>/month
+                R<?php echo number_format($property['rent_amount']); ?>/month
               </div>
             </div>
           </div>
@@ -589,7 +589,7 @@ function fileExists($path) {
                 <div class="gallery-slideshow">
                     <?php foreach ($images as $index => $image): ?>
                         <div class="gallery-slide">
-                            <img src="/easyrent/uploads/properties/<?php echo $image['image_url']; ?>"
+                            <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
                                  alt="Property image <?php echo $index + 1; ?>"
                                  onclick="openModal(<?php echo $index; ?>)">
                         </div>
@@ -613,7 +613,7 @@ function fileExists($path) {
             <div class="image-grid">
                 <?php foreach ($images as $image): ?>
                     <div class="grid-item">
-                        <img src="/easyrent/uploads/properties/<?php echo $image['image_url']; ?>"
+                        <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
                              alt="Property image"
                              onclick="openModal(<?php echo array_search($image, $images); ?>)">
                     </div>
@@ -705,13 +705,9 @@ function fileExists($path) {
                     <i class="fas fa-check-circle mr-2"></i> You have already applied for this property
                   </div>
                 <?php else: ?>
-                  <button onclick="applyForProperty()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold mb-3">
-                    <i class="fas fa-file-alt mr-2"></i> Apply Now
-                  </button>
+                 
                 <?php endif; ?>
-                <button onclick="contactLandlord()" class="w-full bg-white text-blue-600 border border-blue-300 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50">
-                  <i class="fas fa-envelope mr-2"></i> Send Message
-                </button>
+                
               <?php else: ?>
                 <div class="bg-blue-100 border border-blue-300 text-blue-700 px-4 py-3 rounded">
                   <i class="fas fa-info-circle mr-2"></i> Contact information is available to tenants only
@@ -739,7 +735,7 @@ function fileExists($path) {
                 <?php if (!empty($property['deposit_amount'])): ?>
                   <div class="flex justify-between">
                     <span class="text-gray-600">Security Deposit:</span>
-                    <span class="font-semibold">$<?php echo number_format($property['deposit_amount']); ?></span>
+                    <span class="font-semibold">R<?php echo number_format($property['deposit_amount']); ?></span>
                   </div>
                 <?php endif; ?>
               </div>
@@ -759,7 +755,7 @@ const images = <?php
     $imageUrls = [];
     foreach ($images as $image) {
         if (!empty($image['image_url'])) {
-            $imageUrls[] = '/easyrent/uploads/properties/' . $image['image_url'];
+            $imageUrls[] = '/easyrent-/uploads/properties/' . $image['image_url'];
         }
     }
     echo json_encode($imageUrls);
@@ -1046,5 +1042,6 @@ if (gallery) {
     }, 5000);
 }
     </script>
+    
 </body>
 </html>

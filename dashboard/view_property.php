@@ -522,101 +522,26 @@ function fileExists($path) {
     height: 100%;
     object-fit: cover;
 }
- /* Top Navigation */
-        .top-nav {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-            padding: 0 2rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-menu a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-menu a:hover,
-        .nav-menu a.active {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .profile-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
 </style>
 </head>
-<!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <div class="logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
-            </div>
-            
-            <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
-                <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="add_property.php">Add Property</a></li>
-                <li><a href="maintenance.php">Maintenance</a></li>
-                <li><a href="tenants.php">Tenants</a></li>
-                <li><a href="reports.php">Reports</a></li>
-            </ul>
+<!-- Navigation -->
+  <nav class="fixed w-full top-0 z-50 bg-gradient-to-r from-blue-900 to-blue-600 shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <!-- Logo & Name -->
+        <a href="index.php" class="flex items-center space-x-3">
+         
+          <div>
+            <h1 class="text-xl font-bold text-white">EasyRent</h1>
+            <p class="text-xs text-blue-200">Property Management</p>
+          </div>
+        </a>
         <!-- Back Link & User -->
         <div class="flex items-center space-x-6">
-          
+          <a href="/easyrent-/dashboard/landlord_dashboard.php" class="flex items-center text-white hover:text-blue-200 transition">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
           </a>
-          <div class="flex items-center space-x-2 text-white">
-            <i class="fas fa-user-circle text-2xl"></i>
-            <span><?php echo htmlspecialchars($username); ?></span>
-          </div>
+          
         </div>
       </div>
     </div>
@@ -645,7 +570,7 @@ function fileExists($path) {
             <div class="flex flex-col items-end">
               <span class="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">Available</span>
               <div class="text-3xl font-bold text-blue-600">
-                $<?php echo number_format($property['rent_amount']); ?>/month
+                R<?php echo number_format($property['rent_amount']); ?>/month
               </div>
             </div>
           </div>
@@ -661,7 +586,7 @@ function fileExists($path) {
                 <div class="gallery-slideshow">
                     <?php foreach ($images as $index => $image): ?>
                         <div class="gallery-slide">
-                            <img src="/easyrent/uploads/properties/<?php echo $image['image_url']; ?>"
+                            <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
                                  alt="Property image <?php echo $index + 1; ?>"
                                  onclick="openModal(<?php echo $index; ?>)">
                         </div>
@@ -685,7 +610,7 @@ function fileExists($path) {
             <div class="image-grid">
                 <?php foreach ($images as $image): ?>
                     <div class="grid-item">
-                        <img src="/easyrent/uploads/properties/<?php echo $image['image_url']; ?>"
+                        <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
                              alt="Property image"
                              onclick="openModal(<?php echo array_search($image, $images); ?>)">
                     </div>
@@ -777,13 +702,9 @@ function fileExists($path) {
                     <i class="fas fa-check-circle mr-2"></i> You have already applied for this property
                   </div>
                 <?php else: ?>
-                  <button onclick="applyForProperty()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold mb-3">
-                    <i class="fas fa-file-alt mr-2"></i> Apply Now
-                  </button>
+                 
                 <?php endif; ?>
-                <button onclick="contactLandlord()" class="w-full bg-white text-blue-600 border border-blue-300 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50">
-                  <i class="fas fa-envelope mr-2"></i> Send Message
-                </button>
+                
               <?php else: ?>
                 <div class="bg-blue-100 border border-blue-300 text-blue-700 px-4 py-3 rounded">
                   <i class="fas fa-info-circle mr-2"></i> Contact information is available to tenants only
@@ -811,7 +732,7 @@ function fileExists($path) {
                 <?php if (!empty($property['deposit_amount'])): ?>
                   <div class="flex justify-between">
                     <span class="text-gray-600">Security Deposit:</span>
-                    <span class="font-semibold">$<?php echo number_format($property['deposit_amount']); ?></span>
+                    <span class="font-semibold">R<?php echo number_format($property['deposit_amount']); ?></span>
                   </div>
                 <?php endif; ?>
               </div>
@@ -831,7 +752,7 @@ const images = <?php
     $imageUrls = [];
     foreach ($images as $image) {
         if (!empty($image['image_url'])) {
-            $imageUrls[] = '/easyrent/uploads/properties/' . $image['image_url'];
+            $imageUrls[] = '/easyrent-/uploads/properties/' . $image['image_url'];
         }
     }
     echo json_encode($imageUrls);
