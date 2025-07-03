@@ -7,10 +7,79 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
 $userRole = $isLoggedIn ? $_SESSION['user_type'] : '';
 $userId = $isLoggedIn ? $_SESSION['user_id'] : '';
 
-
 if ($isLoggedIn && $userRole === 'admin') {
     header("Location: admin_dashboard.php");
     exit();
+}
+
+// Initialize profile alert variables
+$showProfileAlert = false;
+$missingFields = [];
+
+if ($isLoggedIn) {
+    // Connect to database
+    $servername = "localhost";
+    $username_db = "root";
+    $password_db = "";
+    $dbname = "easyrent_db";
+    
+    $conn = new mysqli($servername, $username_db, $password_db, $dbname);
+    
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    }
+    
+    // Fetch user profile from database
+    $stmt = $conn->prepare("SELECT first_name, last_name, phone, date_of_birth, profile_image FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        
+        // Check if profile is complete
+        $profileComplete = true;
+        $missingFields = [];
+        
+        // Required profile fields
+        $requiredFields = ['first_name', 'last_name', 'phone', 'date_of_birth'];
+        
+        // Check if any required fields are missing
+        foreach ($requiredFields as $field) {
+            if (empty($user[$field])) {
+                $profileComplete = false;
+                $missingFields[] = str_replace('_', ' ', $field);
+            }
+        }
+        
+        // Check if profile image is default
+        if (empty($user['profile_image']) || $user['profile_image'] === 'default.jpg') {
+            $profileComplete = false;
+            $missingFields[] = 'profile image';
+        }
+        
+        // Update session with latest data
+        $_SESSION['first_name'] = $user['first_name'];
+        $_SESSION['last_name'] = $user['last_name'];
+        $_SESSION['phone'] = $user['phone'];
+        $_SESSION['date_of_birth'] = $user['date_of_birth'];
+        $_SESSION['profile_image'] = $user['profile_image'];
+        
+        // Store in session for later use
+        $_SESSION['profile_complete'] = $profileComplete;
+        $_SESSION['missing_fields'] = $missingFields;
+        
+        // Check if we should show the alert
+        if (!$profileComplete && !isset($_SESSION['profile_alert_shown'])) {
+            $showProfileAlert = true;
+            // Set flag so it only shows once
+            $_SESSION['profile_alert_shown'] = true;
+        }
+    }
+    
+    $stmt->close();
+    $conn->close();
 }
 ?>
 <!DOCTYPE html>
@@ -202,86 +271,62 @@ if ($isLoggedIn && $userRole === 'admin') {
             backdrop-filter: blur(10px);
         }
         
-        /* Custom SweetAlert styling */
+        /* SweetAlert2 Styling */
+        .swal2-popup {
+          border-radius: 1rem !important;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+          padding: 2rem !important;
+          background: #ffffff !important;
+        }
+
+        .swal2-title {
+          font-size: 1.5rem !important; 
+          font-weight: 700 !important;
+          color: #1e40af !important; 
+          margin-bottom: 1.5rem !important;
+        }
+
+        .swal2-html-container {
+          font-size: 1.1rem !important;
+          color: #374151 !important;
+          line-height: 1.6 !important;
+          margin-bottom: 1.5rem !important;
+        }
+
+        .swal2-html-container a {
+          display: inline-block;
+          margin-top: 1rem;
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #1e40af, #3b82f6);
+          color: white !important;
+          border-radius: 0.5rem;
+          text-decoration: none;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+        }
+
+        .swal2-html-container a:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 8px rgba(59, 130, 246, 0.4);
+          text-decoration: none;
+        }
+
         .swal2-confirm {
-            background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
-            border: none !important;
-            box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3) !important;
-            transition: all 0.3s ease !important;
+          background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
+          border: none !important;
+          color: #fff !important;
+          padding: 0.75rem 2rem !important;
+          font-size: 1rem !important;
+          border-radius: 0.5rem !important;
+          box-shadow: none !important;
+          transition: all 0.3s ease !important;
         }
-        
+
         .swal2-confirm:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 8px rgba(59, 130, 246, 0.4) !important;
+          transform: translateY(-2px) !important;
+          opacity: 0.95 !important;
         }
-        
-        .swal2-cancel {
-            background: rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            transition: all 0.3s ease !important;
-        }
-        
-        .swal2-cancel:hover {
-            background: rgba(255, 255, 255, 0.2) !important;
-            transform: translateY(-2px) !important;
-        }
-        /* SweetAlert2: Rounded popup with soft shadow */
-.swal2-popup {
-  border-radius: 1rem !important; /* Rounded corners */
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important; /* Soft shadow */
-  padding: 2rem !important;
-  background: #ffffff !important; /* Clean white background */
-}
-
-/* Keep your nice size */
-.swal2-title {
-  font-size: 2rem !important; 
-  font-weight: 700 !important;
-  color: #1e40af !important; 
-}
-
-.swal2-html-container,
-.swal2-content {
-  font-size: 1.25rem !important; 
-  color: #374151 !important; 
-}
-
-/* Confirm button: gradient, NO shadow */
-.swal2-confirm {
-  background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
-  border: none !important;
-  color: #fff !important;
-  padding: 0.75rem 2rem !important;
-  font-size: 1rem !important;
-  border-radius: 0.5rem !important;
-  box-shadow: none !important; /* No box shadow */
-  transition: all 0.3s ease !important;
-}
-
-.swal2-confirm:hover {
-  transform: translateY(-2px) !important;
-  opacity: 0.95 !important; 
-}
-
-/* Cancel button: frosted glass style */
-.swal2-cancel {
-  background: rgba(255, 255, 255, 0.2) !important;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-  color: #1e40af !important;
-  padding: 0.75rem 2rem !important;
-  font-size: 1rem !important;
-  border-radius: 0.5rem !important;
-  backdrop-filter: blur(4px) !important; 
-  transition: all 0.3s ease !important;
-}
-
-.swal2-cancel:hover {
-  background: rgba(255, 255, 255, 0.35) !important;
-  transform: translateY(-2px) !important;
-}
-
-
-
     </style>
 </head>
 <body>
@@ -302,6 +347,7 @@ if ($isLoggedIn && $userRole === 'admin') {
                     <a href="#properties" class="text-white hover:text-blue-300 transition-colors">Properties</a>
                     <a href="#about" class="text-white hover:text-blue-300 transition-colors">About</a>
                     <a href="#contact" class="text-white hover:text-blue-300 transition-colors">Contact</a>
+                    <a href="profile.php" class="text-white hover:text-blue-300 transition-colors">Profile</a>
                     
                     <!-- Show Tenant Dashboard link when logged in as tenant -->
                     <?php if($isLoggedIn && $userRole === 'tenant'): ?>
@@ -321,8 +367,6 @@ if ($isLoggedIn && $userRole === 'admin') {
                     </div>
                     <?php endif; ?>
                 </div>
-
-
 
                 <!-- User Authentication Section -->
                 <div class="flex items-center space-x-4">
@@ -432,180 +476,177 @@ if ($isLoggedIn && $userRole === 'admin') {
         </div>
     </nav>
     
-    
+    <!-- Properties Section -->
+    <section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800">
+        <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold text-white mb-3">Available Properties</h2>
+                <p class="text-blue-200">Explore our latest approved rental listings</p>
+            </div>
+            
+            <!-- Filter Section -->
+            <div class="mb-8">
+                <div class="glass-card rounded-xl p-6">
+                    <h3 class="text-xl font-semibold text-white mb-4">
+                        <i class="fas fa-filter mr-2"></i>Filter Properties
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Location Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-blue-200 mb-2">Location</label>
+                            <input type="text" id="locationFilter" placeholder="Search by location..." 
+                                   class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+                        </div>
+                        
+                        <!-- Bedrooms Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-blue-200 mb-2">Min Bedrooms</label>
+                            <select id="bedroomsFilter" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black">
+                                <option value="">Any</option>
+                                <option value="1">1+</option>
+                                <option value="2">2+</option>
+                                <option value="3">3+</option>
+                                <option value="4">4+</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Price Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-blue-200 mb-2">Max Price (R)</label>
+                            <input type="number" id="maxPriceFilter" placeholder="Max price..." 
+                                   class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+                        </div>
+                        
+                        <!-- Clear Filters -->
+                        <div class="flex items-end">
+                            <button onclick="clearFilters()" class="w-full btn-secondary px-4 py-2 rounded-lg text-white font-semibold">
+                                <i class="fas fa-times mr-2"></i>Clear Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <?php
+            // DB Setup
+            $servername = "localhost";
+            $username_db = "root";
+            $password_db = "";
+            $dbname = "easyrent_db";
 
-<!-- Properties Section -->
-<section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800">
-  <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="text-center mb-12">
-      <h2 class="text-4xl font-bold text-white mb-3">Available Properties</h2>
-      <p class="text-blue-200">Explore our latest approved rental listings</p>
-    </div>
-<!-- Filter Section -->
-<div class="mb-8">
-  <div class="glass-card rounded-xl p-6">
-    <h3 class="text-xl font-semibold text-white mb-4">
-      <i class="fas fa-filter mr-2"></i>Filter Properties
-    </h3>
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <!-- Location Filter -->
-      <div>
-        <label class="block text-sm font-medium text-blue-200 mb-2">Location</label>
-        <input type="text" id="locationFilter" placeholder="Search by location..." 
-               class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
-      </div>
-      
-      <!-- Bedrooms Filter -->
-      <div>
-        <label class="block text-sm font-medium text-blue-200 mb-2">Min Bedrooms</label>
-        <select id="bedroomsFilter" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black">
-          <option value="">Any</option>
-          <option value="1">1+</option>
-          <option value="2">2+</option>
-          <option value="3">3+</option>
-          <option value="4">4+</option>
-        </select>
-      </div>
-      
-      <!-- Price Filter -->
-      <div>
-        <label class="block text-sm font-medium text-blue-200 mb-2">Max Price (R)</label>
-        <input type="number" id="maxPriceFilter" placeholder="Max price..." 
-               class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
-      </div>
-      
-      <!-- Clear Filters -->
-      <div class="flex items-end">
-        <button onclick="clearFilters()" class="w-full btn-secondary px-4 py-2 rounded-lg text-white font-semibold">
-          <i class="fas fa-times mr-2"></i>Clear Filters
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-    <?php
-// DB Setup
-$servername = "localhost";
-$username_db = "root";
-$password_db = "";
-$dbname = "easyrent_db";
+            try {
+                $conn = new mysqli($servername, $username_db, $password_db, $dbname);
+                if ($conn->connect_error) throw new Exception("Connection failed: " . $conn->connect_error);
 
-try {
-    $conn = new mysqli($servername, $username_db, $password_db, $dbname);
-    if ($conn->connect_error) throw new Exception("Connection failed: " . $conn->connect_error);
+                // Build the WHERE clause based on filters
+                $whereConditions = ["p.admin_approved = 1"];
+                $params = [];
+                $types = "";
 
-    // Build the WHERE clause based on filters
-    $whereConditions = ["p.admin_approved = 1"];
-    $params = [];
-    $types = "";
+                // Location filter
+                if (!empty($_GET['location'])) {
+                    $whereConditions[] = "(p.title LIKE ? OR p.address LIKE ?)";
+                    $searchTerm = "%" . $_GET['location'] . "%";
+                    $params[] = $searchTerm;
+                    $params[] = $searchTerm;
+                    $types .= "ss";
+                }
 
-    // Location filter
-    if (!empty($_GET['location'])) {
-        $whereConditions[] = "(p.title LIKE ? OR p.address LIKE ?)";
-        $searchTerm = "%" . $_GET['location'] . "%";
-        $params[] = $searchTerm;
-        $params[] = $searchTerm;
-        $types .= "ss";
-    }
+                // Bedrooms filter
+                if (!empty($_GET['bedrooms']) && is_numeric($_GET['bedrooms'])) {
+                    $whereConditions[] = "p.bedrooms >= ?";
+                    $params[] = (int)$_GET['bedrooms'];
+                    $types .= "i";
+                }
 
-    // Bedrooms filter
-    if (!empty($_GET['bedrooms']) && is_numeric($_GET['bedrooms'])) {
-        $whereConditions[] = "p.bedrooms >= ?";
-        $params[] = (int)$_GET['bedrooms'];
-        $types .= "i";
-    }
+                // Price filter
+                if (!empty($_GET['maxPrice']) && is_numeric($_GET['maxPrice'])) {
+                    $whereConditions[] = "p.rent_amount <= ?";
+                    $params[] = (int)$_GET['maxPrice'];
+                    $types .= "i";
+                }
 
-    // Price filter
-    if (!empty($_GET['maxPrice']) && is_numeric($_GET['maxPrice'])) {
-        $whereConditions[] = "p.rent_amount <= ?";
-        $params[] = (int)$_GET['maxPrice'];
-        $types .= "i";
-    }
+                $whereClause = implode(" AND ", $whereConditions);
+                
+                $sql = "SELECT p.*, 
+                        (SELECT image_url FROM property_images 
+                         WHERE property_id = p.id AND is_primary = 1 LIMIT 1) AS main_image
+                        FROM properties p
+                        WHERE $whereClause 
+                        ORDER BY p.created_at DESC 
+                        LIMIT 12";
 
-    $whereClause = implode(" AND ", $whereConditions);
-    
-    $sql = "SELECT p.*, 
-            (SELECT image_url FROM property_images 
-             WHERE property_id = p.id AND is_primary = 1 LIMIT 1) AS main_image
-            FROM properties p
-            WHERE $whereClause 
-            ORDER BY p.created_at DESC 
-            LIMIT 12";
+                $stmt = $conn->prepare($sql);
+                if (!empty($params)) {
+                    $stmt->bind_param($types, ...$params);
+                }
+                $stmt->execute();
+                $result = $stmt->get_result();
 
-    $stmt = $conn->prepare($sql);
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    $stmt->execute();
-    $result = $stmt->get_result();
+                if ($result->num_rows > 0) {
+                    echo '<div id="propertiesGrid" class="grid gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">';
+                    
+                    while ($property = $result->fetch_assoc()) {
+                        $property_image = !empty($property['main_image']) ? 'uploads/properties/' . htmlspecialchars($property['main_image']) : '';
+                        $rent_amount = isset($property['rent_amount']) ? number_format($property['rent_amount']) : 'N/A';
+                        $title = htmlspecialchars($property['title'] ?? 'Untitled Property');
+                        $address = htmlspecialchars($property['address'] ?? 'Address not specified');
+                        $bedrooms = htmlspecialchars($property['bedrooms'] ?? 'N/A');
+                        $bathrooms = htmlspecialchars($property['bathrooms'] ?? 'N/A');
+                        $description = htmlspecialchars($property['description'] ?? '');
+                        $truncated_description = strlen($description) > 90 ? substr($description, 0, 90) . '...' : $description;
 
-    if ($result->num_rows > 0) {
-        echo '<div id="propertiesGrid" class="grid gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">';
-        
-        while ($property = $result->fetch_assoc()) {
-            // Your existing property card HTML code stays the same
-            $property_image = !empty($property['main_image']) ? 'uploads/properties/' . htmlspecialchars($property['main_image']) : '';
-            $rent_amount = isset($property['rent_amount']) ? number_format($property['rent_amount']) : 'N/A';
-            $title = htmlspecialchars($property['title'] ?? 'Untitled Property');
-            $address = htmlspecialchars($property['address'] ?? 'Address not specified');
-            $bedrooms = htmlspecialchars($property['bedrooms'] ?? 'N/A');
-            $bathrooms = htmlspecialchars($property['bathrooms'] ?? 'N/A');
-            $description = htmlspecialchars($property['description'] ?? '');
-            $truncated_description = strlen($description) > 90 ? substr($description, 0, 90) . '...' : $description;
+                        echo '<div class="bg-white rounded-2xl shadow-md hover:shadow-xl transition duration-300 overflow-hidden flex flex-col">';
+                        if ($property_image) {
+                            echo '<div class="h-48 w-full bg-cover bg-center" style="background-image: url(\'' . $property_image . '\')"></div>';
+                        } else {
+                            echo '<div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 text-5xl"><i class="fas fa-home"></i></div>';
+                        }
 
-            echo '<div class="bg-white rounded-2xl shadow-md hover:shadow-xl transition duration-300 overflow-hidden flex flex-col">';
-            if ($property_image) {
-                echo '<div class="h-48 w-full bg-cover bg-center" style="background-image: url(\'' . $property_image . '\')"></div>';
-            } else {
-                echo '<div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 text-5xl"><i class="fas fa-home"></i></div>';
+                        echo '<div class="p-5 flex-1 flex flex-col justify-between">';
+                        echo '<div>';
+                        echo '<span class="inline-block mb-2 text-xs text-green-600 font-semibold uppercase">Available</span>';
+                        echo '<h3 class="text-xl font-bold text-gray-800">' . $title . '</h3>';
+                        echo '<p class="text-gray-500 text-sm mt-1 flex items-center"><i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>' . $address . '</p>';
+                        echo '<div class="flex items-center justify-between mt-3 text-gray-600 text-sm">';
+                        echo '<span><i class="fas fa-bed mr-1"></i>' . $bedrooms . ' Beds</span>';
+                        echo '<span><i class="fas fa-bath mr-1"></i>' . $bathrooms . ' Baths</span>';
+                        echo '</div>';
+                        echo '<p class="text-gray-600 text-sm mt-4">' . $truncated_description . '</p>';
+                        echo '</div>';
+
+                        echo '<div class="mt-4 flex items-center justify-between">';
+                        echo '<span class="text-blue-600 font-bold text-lg">R' . $rent_amount . '</span>';
+                        echo '<a href="' . ($isLoggedIn ? 'dashboard/property_details.php?id=' . $property['id'] : 'auth/register.php') . '" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">';
+                        echo '<i class="fas ' . ($isLoggedIn ? 'fa-eye' : 'fa-user-plus') . ' mr-2"></i>' . ($isLoggedIn ? 'View' : 'Sign Up to View') . '</a>';
+                        echo '</div>';
+
+                        echo '</div>';
+                        echo '</div>';
+                    }
+
+                    echo '</div>';
+                } else {
+                    echo '<div class="text-center py-16">';
+                    echo '<div class="inline-block bg-blue-800 p-6 rounded-full shadow-lg animate-bounce mb-6">';
+                    echo '<i class="fas fa-search text-white text-5xl"></i>';
+                    echo '</div>';
+                    echo '<h3 class="text-2xl font-bold text-white mb-2">No Properties Found</h3>';
+                    echo '<p class="text-blue-200 text-sm">Try adjusting your search criteria or clear the filters.</p>';
+                    echo '</div>';
+                }
+
+                $stmt->close();
+                $conn->close();
+            } catch (Exception $e) {
+                echo '<div class="bg-red-100 text-red-700 p-4 rounded-lg mt-6 shadow">';
+                echo '<i class="fas fa-exclamation-triangle mr-2"></i>';
+                echo '<strong>Error:</strong> ' . htmlspecialchars($e->getMessage());
+                echo '</div>';
             }
-
-            echo '<div class="p-5 flex-1 flex flex-col justify-between">';
-            echo '<div>';
-            echo '<span class="inline-block mb-2 text-xs text-green-600 font-semibold uppercase">Available</span>';
-            echo '<h3 class="text-xl font-bold text-gray-800">' . $title . '</h3>';
-            echo '<p class="text-gray-500 text-sm mt-1 flex items-center"><i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>' . $address . '</p>';
-            echo '<div class="flex items-center justify-between mt-3 text-gray-600 text-sm">';
-            echo '<span><i class="fas fa-bed mr-1"></i>' . $bedrooms . ' Beds</span>';
-            echo '<span><i class="fas fa-bath mr-1"></i>' . $bathrooms . ' Baths</span>';
-            echo '</div>';
-            echo '<p class="text-gray-600 text-sm mt-4">' . $truncated_description . '</p>';
-            echo '</div>';
-
-            echo '<div class="mt-4 flex items-center justify-between">';
-            echo '<span class="text-blue-600 font-bold text-lg">R' . $rent_amount . '</span>';
-            echo '<a href="' . ($isLoggedIn ? 'dashboard/property_details.php?id=' . $property['id'] : 'auth/register.php') . '" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">';
-            echo '<i class="fas ' . ($isLoggedIn ? 'fa-eye' : 'fa-user-plus') . ' mr-2"></i>' . ($isLoggedIn ? 'View' : 'Sign Up to View') . '</a>';
-            echo '</div>';
-
-            echo '</div>';
-            echo '</div>';
-        }
-
-        echo '</div>';
-    } else {
-        echo '<div class="text-center py-16">';
-        echo '<div class="inline-block bg-blue-800 p-6 rounded-full shadow-lg animate-bounce mb-6">';
-        echo '<i class="fas fa-search text-white text-5xl"></i>';
-        echo '</div>';
-        echo '<h3 class="text-2xl font-bold text-white mb-2">No Properties Found</h3>';
-        echo '<p class="text-blue-200 text-sm">Try adjusting your search criteria or clear the filters.</p>';
-        echo '</div>';
-    }
-
-    $stmt->close();
-    $conn->close();
-} catch (Exception $e) {
-    echo '<div class="bg-red-100 text-red-700 p-4 rounded-lg mt-6 shadow">';
-    echo '<i class="fas fa-exclamation-triangle mr-2"></i>';
-    echo '<strong>Error:</strong> ' . htmlspecialchars($e->getMessage());
-    echo '</div>';
-}
-?>
-  </div>
-</section>
-
-
+            ?>
+        </div>
+    </section>
 
     <!-- About Section -->
     <section id="about" class="py-16">
@@ -759,60 +800,45 @@ try {
                 }
             });
         }
+        
+ <?php if ($showProfileAlert): ?>
+// Show profile completion alert
+Swal.fire({
+    title: 'Complete Your Profile',
+    html: `Your profile information is incomplete.<br><br>
+           Please complete your profile to access all features and ensure the best experience.<br><br>
+           <a href="settings.php" class="text-blue-500 underline font-medium">Click here to complete your profile</a>`,
+    icon: 'info',
+    confirmButtonText: 'OK',
+    customClass: {
+        confirmButton: 'btn-primary',
+        popup: 'swal2-rounded'
+    },
+    buttonsStyling: false,
+    allowOutsideClick: false
+});
+<?php endif; ?>
     });
     </script>
 
     <!-- Property Management Script -->
     <script>
-  // Property data - replace this with your actual PHP data
-const allProperties = [
-    // This array should be populated with data from your PHP backend
-    // Example structure:
-    // {
-    //     id: 1,
-    //     title: "Property Title",
-    //     location: "Location",
-    //     bedrooms: 2,
-    //     bathrooms: 2,
-    //     price: 2500,
-    //     status: "available", // available, occupied, maintenance
-    //     description: "Property description",
-    //     image: "image_url"
-    // }
-];
-
-let filteredProperties = [...allProperties];
-let currentPage = 1;
-const propertiesPerPage = 6;
-
-    // Initialize properties on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeProperties();
-        setupFilterEventListeners();
-    });
-
     // Setup filter event listeners
     function setupFilterEventListeners() {
-        // Add event listeners to filter inputs
-        document.getElementById('locationFilter').addEventListener('input', debounce(applyFilters, 300));
+        document.getElementById('locationFilter').addEventListener('input', debounce(applyFilters, 500));
         document.getElementById('bedroomsFilter').addEventListener('change', applyFilters);
-        document.getElementById('maxPriceFilter').addEventListener('input', debounce(applyFilters, 300));
+        document.getElementById('maxPriceFilter').addEventListener('input', debounce(applyFilters, 500));
         
-        // Add Enter key listener for search inputs
+        // Enter key listeners
         document.getElementById('locationFilter').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                applyFilters();
-            }
+            if (e.key === 'Enter') applyFilters();
         });
         
         document.getElementById('maxPriceFilter').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                applyFilters();
-            }
+            if (e.key === 'Enter') applyFilters();
         });
     }
 
-    // Debounce function to limit API calls
     function debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -825,59 +851,39 @@ const propertiesPerPage = 6;
         };
     }
 
-    // Initialize properties display
-    function initializeProperties() {
-        displayProperties();
-    }
-
-    // Apply filters to properties
     function applyFilters() {
-        const location = document.getElementById('locationFilter').value.toLowerCase().trim();
+        const location = document.getElementById('locationFilter').value.trim();
         const bedrooms = document.getElementById('bedroomsFilter').value;
-        const maxPrice = document.getElementById('maxPriceFilter').value;
-
-        filteredProperties = allProperties.filter(property => {
-            // Location filter - check if location contains the search term
-            const matchesLocation = !location || 
-                property.location.toLowerCase().includes(location) ||
-                property.title.toLowerCase().includes(location);
-            
-            // Bedrooms filter - property must have at least the specified number of bedrooms
-            const matchesBedrooms = !bedrooms || property.bedrooms >= parseInt(bedrooms);
-            
-            // Price filter - property price must be less than or equal to max price
-            const matchesPrice = !maxPrice || property.price <= parseInt(maxPrice);
-            
-            return matchesLocation && matchesBedrooms && matchesPrice;
-        });
-
-        // Reset to first page when filters are applied
-        currentPage = 1;
-        displayProperties();
+        const maxPrice = document.getElementById('maxPriceFilter').value.trim();
         
-        // Update URL with current filters (optional)
-        updateURLWithFilters(location, bedrooms, maxPrice);
-    }
-
-    // Update URL with current filter parameters
-    function updateURLWithFilters(location, bedrooms, maxPrice) {
-        const url = new URL(window.location);
-        
-        // Clear existing filter parameters
+        // Build URL with filters
+        const url = new URL(window.location.href);
         url.searchParams.delete('location');
         url.searchParams.delete('bedrooms');
         url.searchParams.delete('maxPrice');
         
-        // Add new filter parameters if they have values
         if (location) url.searchParams.set('location', location);
         if (bedrooms) url.searchParams.set('bedrooms', bedrooms);
         if (maxPrice) url.searchParams.set('maxPrice', maxPrice);
         
-        // Update URL without reloading the page
-        window.history.replaceState({}, '', url);
+        // Reload page with new filters
+        window.location.href = url.toString();
     }
 
-    // Load filters from URL parameters
+    function clearFilters() {
+        document.getElementById('locationFilter').value = '';
+        document.getElementById('bedroomsFilter').value = '';
+        document.getElementById('maxPriceFilter').value = '';
+        
+        // Remove all filter parameters from URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete('location');
+        url.searchParams.delete('bedrooms');
+        url.searchParams.delete('maxPrice');
+        
+        window.location.href = url.toString();
+    }
+
     function loadFiltersFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         
@@ -888,383 +894,13 @@ const propertiesPerPage = 6;
         if (location) document.getElementById('locationFilter').value = location;
         if (bedrooms) document.getElementById('bedroomsFilter').value = bedrooms;
         if (maxPrice) document.getElementById('maxPriceFilter').value = maxPrice;
-        
-        // Apply filters if any were found in URL
-        if (location || bedrooms || maxPrice) {
-            applyFilters();
-        }
     }
-
-    // Display properties with loading animation
-    function displayProperties() {
-        const grid = document.getElementById('propertiesGrid');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const errorMessage = document.getElementById('errorMessage');
-        const noProperties = document.getElementById('noProperties');
-        const loadMoreSection = document.getElementById('loadMoreSection');
-
-        // Show loading spinner
-        loadingSpinner.style.display = 'flex';
-        errorMessage.classList.add('hidden');
-        noProperties.classList.add('hidden');
-        loadMoreSection.style.display = 'none';
-
-        // Clear existing properties if starting fresh
-        if (currentPage === 1) {
-            grid.innerHTML = '';
-        }
-
-        // Simulate loading delay for better UX
-        setTimeout(() => {
-            loadingSpinner.style.display = 'none';
-
-            // Check if no properties match the filters
-            if (filteredProperties.length === 0) {
-                noProperties.classList.remove('hidden');
-                updateResultsCount(0, 0);
-                return;
-            }
-
-            // Calculate properties to show
-            const startIndex = (currentPage - 1) * propertiesPerPage;
-            const endIndex = startIndex + propertiesPerPage;
-            const propertiesToShow = filteredProperties.slice(startIndex, endIndex);
-
-            // If starting fresh (page 1), clear the grid
-            if (currentPage === 1) {
-                grid.innerHTML = '';
-            }
-
-            // Add new properties to the grid
-            propertiesToShow.forEach((property, index) => {
-                const propertyCard = createPropertyCard(property);
-                
-                // Add fade-in animation
-                propertyCard.style.opacity = '0';
-                propertyCard.style.transform = 'translateY(20px)';
-                grid.appendChild(propertyCard);
-                
-                // Trigger animation
-                setTimeout(() => {
-                    propertyCard.style.transition = 'all 0.5s ease';
-                    propertyCard.style.opacity = '1';
-                    propertyCard.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
-
-            // Update results count
-            const totalShown = Math.min(endIndex, filteredProperties.length);
-            updateResultsCount(totalShown, filteredProperties.length);
-
-            // Show/hide load more button
-            if (endIndex < filteredProperties.length) {
-                loadMoreSection.style.display = 'block';
-                const loadMoreBtn = document.getElementById('loadMoreBtn');
-                const remaining = filteredProperties.length - endIndex;
-                loadMoreBtn.innerHTML = `<i class="fas fa-plus mr-3"></i>Load More Properties (${remaining} remaining)`;
-            } else {
-                loadMoreSection.style.display = 'none';
-            }
-
-        }, 500); // Loading delay
-    }
-
-    // Update results count display
-    function updateResultsCount(shown, total) {
-        let resultsCountElement = document.getElementById('resultsCount');
-        
-        // Create results count element if it doesn't exist
-        if (!resultsCountElement) {
-            resultsCountElement = document.createElement('div');
-            resultsCountElement.id = 'resultsCount';
-            resultsCountElement.className = 'text-center text-blue-200 mb-6';
-            
-            const propertiesSection = document.getElementById('properties');
-            const grid = document.getElementById('propertiesGrid');
-            propertiesSection.insertBefore(resultsCountElement, grid);
-        }
-        
-        if (total === 0) {
-            resultsCountElement.textContent = 'No properties found matching your criteria';
-        } else if (shown === total) {
-            resultsCountElement.textContent = `Showing all ${total} properties`;
-        } else {
-            resultsCountElement.textContent = `Showing ${shown} of ${total} properties`;
-        }
-    }
-
-    // Create property card HTML
-    function createPropertyCard(property) {
-        const card = document.createElement('div');
-        card.className = 'property-card rounded-2xl overflow-hidden relative';
-        
-        const statusClass = `status-${property.status}`;
-        const statusText = property.status.charAt(0).toUpperCase() + property.status.slice(1);
-
-        card.innerHTML = `
-            <div class="property-image" style="background-image: url('${property.image}')"></div>
-            <div class="status-badge ${statusClass}">${statusText}</div>
-            <div class="p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">${property.title}</h3>
-                <p class="text-gray-600 mb-3 flex items-center">
-                    <i class="fas fa-map-marker-alt mr-2 text-blue-500"></i>
-                    ${property.location}
-                </p>
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center space-x-4 text-sm text-gray-600">
-                        <span><i class="fas fa-bed mr-1"></i>${property.bedrooms} Bed</span>
-                        <span><i class="fas fa-bath mr-1"></i>${property.bathrooms} Bath</span>
-                    </div>
-                    <div class="text-2xl font-bold text-blue-600">$${property.price.toLocaleString()}/mo</div>
-                </div>
-                <p class="text-gray-600 text-sm mb-4">${property.description}</p>
-                <div class="flex space-x-3">
-                    <button class="flex-1 btn-primary px-4 py-2 rounded-lg text-white font-semibold text-sm hover:bg-blue-700 transition-colors" 
-                            onclick="viewProperty(${property.id})">
-                        <i class="fas fa-eye mr-2"></i>View Details
-                    </button>
-                    ${property.status === 'available' ? 
-                        `<button class="flex-1 btn-secondary px-4 py-2 rounded-lg text-blue-600 font-semibold text-sm hover:bg-blue-50 transition-colors" 
-                                onclick="contactAboutProperty(${property.id})">
-                            <i class="fas fa-envelope mr-2"></i>Contact
-                        </button>`
-                     : ''}
-                </div>
-            </div>
-        `;
-
-        return card;
-    }
-
-    // Load more properties
-    function loadMoreProperties() {
-        currentPage++;
-        displayProperties();
-        
-        // Smooth scroll to new properties
-        setTimeout(() => {
-            const newProperties = document.querySelectorAll('.property-card');
-            if (newProperties.length > 0) {
-                const targetProperty = newProperties[newProperties.length - propertiesPerPage];
-                if (targetProperty) {
-                    targetProperty.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'center' 
-                    });
-                }
-            }
-        }, 600);
-    }
-
-    // Clear all filters
-    function clearFilters() {
-        document.getElementById('locationFilter').value = '';
-        document.getElementById('bedroomsFilter').value = '';
-        document.getElementById('maxPriceFilter').value = '';
-        
-        filteredProperties = [...allProperties];
-        currentPage = 1;
-        displayProperties();
-        
-        // Clear URL parameters
-        const url = new URL(window.location);
-        url.searchParams.delete('location');
-        url.searchParams.delete('bedrooms');
-        url.searchParams.delete('maxPrice');
-        window.history.replaceState({}, '', url);
-    }
-
-    // View property details
-    function viewProperty(propertyId) {
-        const property = allProperties.find(p => p.id === propertyId);
-        if (property) {
-            // In a real application, this would redirect to a property details page
-            Swal.fire({
-                title: property.title,
-                html: `
-                    <div class="text-left">
-                        <img src="${property.image}" alt="${property.title}" class="w-full h-48 object-cover rounded-lg mb-4">
-                        <p class="mb-2"><strong>Location:</strong> ${property.location}</p>
-                        <p class="mb-2"><strong>Bedrooms:</strong> ${property.bedrooms}</p>
-                        <p class="mb-2"><strong>Bathrooms:</strong> ${property.bathrooms}</p>
-                        <p class="mb-2"><strong>Price:</strong> $${property.price.toLocaleString()}/month</p>
-                        <p class="mb-2"><strong>Status:</strong> ${property.status}</p>
-                        <p class="mb-2"><strong>Description:</strong> ${property.description}</p>
-                    </div>
-                `,
-                showCloseButton: true,
-                showCancelButton: property.status === 'available',
-                confirmButtonText: property.status === 'available' ? 'Contact About This Property' : 'Close',
-                cancelButtonText: 'Close',
-                customClass: {
-                    confirmButton: 'btn-primary',
-                    cancelButton: 'btn-secondary'
-                },
-                buttonsStyling: false
-            }).then((result) => {
-                if (result.isConfirmed && property.status === 'available') {
-                    contactAboutProperty(propertyId);
-                }
-            });
-        }
-    }
-
-    // Contact about property
-    function contactAboutProperty(propertyId) {
-        const property = allProperties.find(p => p.id === propertyId);
-        if (property) {
-            Swal.fire({
-                title: 'Contact About Property',
-                html: `
-                    <div class="text-left">
-                        <p class="mb-4">Interested in: <strong>${property.title}</strong></p>
-                        <form id="contactForm">
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">Your Name</label>
-                                <input type="text" id="contactName" class="w-full px-3 py-2 border rounded-lg" required>
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">Email</label>
-                                <input type="email" id="contactEmail" class="w-full px-3 py-2 border rounded-lg" required>
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">Phone</label>
-                                <input type="tel" id="contactPhone" class="w-full px-3 py-2 border rounded-lg">
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">Message</label>
-                                <textarea id="contactMessage" rows="3" class="w-full px-3 py-2 border rounded-lg" placeholder="I'm interested in this property..."></textarea>
-                            </div>
-                        </form>
-                    </div>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Send Message',
-                cancelButtonText: 'Cancel',
-                customClass: {
-                    confirmButton: 'btn-primary',
-                    cancelButton: 'btn-secondary'
-                },
-                buttonsStyling: false,
-                preConfirm: () => {
-                    const name = document.getElementById('contactName').value;
-                    const email = document.getElementById('contactEmail').value;
-                    
-                    if (!name || !email) {
-                        Swal.showValidationMessage('Please fill in all required fields');
-                        return false;
-                    }
-                    
-                    return {
-                        name: name,
-                        email: email,
-                        phone: document.getElementById('contactPhone').value,
-                        message: document.getElementById('contactMessage').value
-                    };
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // In a real application, this would send the contact form data to the server
-                    Swal.fire({
-                        title: 'Message Sent!',
-                        text: 'Your inquiry has been sent to the property owner. They will contact you soon.',
-                        icon: 'success',
-                        confirmButtonText: 'OK',
-                        customClass: {
-                            confirmButton: 'btn-primary'
-                        },
-                        buttonsStyling: false
-                    });
-                }
-            });
-        }
-    }
-
-    // Initialize filters from URL on page load
+    
+    // Initialize filters
     document.addEventListener('DOMContentLoaded', function() {
+        setupFilterEventListeners();
         loadFiltersFromURL();
     });
     </script>
-    <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Setup filter event listeners
-    setupFilterEventListeners();
-    
-    // Load filters from URL on page load
-    loadFiltersFromURL();
-});
-
-function setupFilterEventListeners() {
-    document.getElementById('locationFilter').addEventListener('input', debounce(applyFilters, 500));
-    document.getElementById('bedroomsFilter').addEventListener('change', applyFilters);
-    document.getElementById('maxPriceFilter').addEventListener('input', debounce(applyFilters, 500));
-    
-    // Enter key listeners
-    document.getElementById('locationFilter').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') applyFilters();
-    });
-    
-    document.getElementById('maxPriceFilter').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') applyFilters();
-    });
-}
-
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-function applyFilters() {
-    const location = document.getElementById('locationFilter').value.trim();
-    const bedrooms = document.getElementById('bedroomsFilter').value;
-    const maxPrice = document.getElementById('maxPriceFilter').value.trim();
-    
-    // Build URL with filters
-    const url = new URL(window.location.href);
-    url.searchParams.delete('location');
-    url.searchParams.delete('bedrooms');
-    url.searchParams.delete('maxPrice');
-    
-    if (location) url.searchParams.set('location', location);
-    if (bedrooms) url.searchParams.set('bedrooms', bedrooms);
-    if (maxPrice) url.searchParams.set('maxPrice', maxPrice);
-    
-    // Reload page with new filters
-    window.location.href = url.toString();
-}
-
-function clearFilters() {
-    document.getElementById('locationFilter').value = '';
-    document.getElementById('bedroomsFilter').value = '';
-    document.getElementById('maxPriceFilter').value = '';
-    
-    // Remove all filter parameters from URL
-    const url = new URL(window.location.href);
-    url.searchParams.delete('location');
-    url.searchParams.delete('bedrooms');
-    url.searchParams.delete('maxPrice');
-    
-    window.location.href = url.toString();
-}
-
-function loadFiltersFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    
-    const location = urlParams.get('location');
-    const bedrooms = urlParams.get('bedrooms');
-    const maxPrice = urlParams.get('maxPrice');
-    
-    if (location) document.getElementById('locationFilter').value = location;
-    if (bedrooms) document.getElementById('bedroomsFilter').value = bedrooms;
-    if (maxPrice) document.getElementById('maxPriceFilter').value = maxPrice;
-}
-</script>
 </body>
 </html>

@@ -106,12 +106,7 @@ mysqli_close($conn);
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Poppins', sans-serif;
-        }
+        
 
         :root {
             --primary: #4a90e2;
@@ -128,78 +123,11 @@ mysqli_close($conn);
             --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
 
-        body {
-            background-color: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
-        }
+        
 
-        .dashboard-container {
-            display: flex;
-            min-height: 100vh;
-        }
+        
 
-        /* Sidebar Styles */
-        .sidebar {
-            width: 250px;
-            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
-            color: white;
-            transition: all 0.3s;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            z-index: 100;
-        }
-
-        .logo-container {
-            padding: 25px 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .logo i {
-            margin-right: 10px;
-            font-size: 28px;
-        }
-
-        .nav-menu {
-            padding: 20px 0;
-        }
-
-        .nav-item {
-            margin: 5px 0;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 25px;
-            color: white;
-            text-decoration: none;
-            transition: all 0.3s;
-            border-left: 3px solid transparent;
-        }
-
-        .nav-link:hover, .nav-link.active {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-left-color: white;
-        }
-
-        .nav-link i {
-            margin-right: 12px;
-            font-size: 18px;
-            width: 24px;
-            text-align: center;
-        }
+       
 
         /* Main Content */
         .main-content {
@@ -604,71 +532,103 @@ mysqli_close($conn);
                 gap: 15px;
             }
         }
+
+         * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+    color: white;
+    padding: 20px 0;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    z-index: 1000;
+}
+#sidebar-overlay {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    #sidebar-overlay {
+        display: block;
+    }
+}
+
+
+        .sidebar .logo {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+        }
+
+        .sidebar .logo h2 {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .sidebar ul {
+            list-style: none;
+        }
+
+        .sidebar ul li {
+            margin: 5px 0;
+        }
+
+        .sidebar ul li a {
+            display: block;
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar ul li a:hover,
+        .sidebar ul li a.active {
+            background-color: rgba(255,255,255,0.1);
+            border-left-color: #fff;
+        }
+
+        .sidebar ul li a i {
+            margin-right: 10px;
+            width: 20px;
+        }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="logo-container">
-                <div class="logo">
-                    <i class="fas fa-home"></i>
-                    <span>EasyRent</span>
-                </div>
-            </div>
-            
-            <div class="nav-menu">
-                <div class="nav-item">
-                    <a href="tenant_dashboard.php" class="nav-link">
-                        <i class="fas fa-tachometer-alt"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="browse_properties.php" class="nav-link">
-                        <i class="fas fa-search"></i>
-                        <span>Browse Properties</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="my_applications.php" class="nav-link active">
-                        <i class="fas fa-file-alt"></i>
-                        <span>My Applications</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="my_lease.php" class="nav-link">
-                        <i class="fas fa-file-contract"></i>
-                        <span>My Lease</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="maintenance_requests.php" class="nav-link">
-                        <i class="fas fa-tools"></i>
-                        <span>Maintenance</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="payment_history.php" class="nav-link">
-                        <i class="fas fa-credit-card"></i>
-                        <span>Payments</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="tenant_profile.php" class="nav-link">
-                        <i class="fas fa-user"></i>
-                        <span>Profile</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="../auth/logout.php" class="nav-link">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Logout</span>
-                    </a>
-                </div>
-            </div>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <h2>Easy Rent</h2>
+            <p>Tenant Portal</p>
         </div>
-
+        <ul>
+            <li><a href="../index.php" class="home-button"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="tenant_dashboard.php" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="browse_properties.php"><i class="fas fa-search"></i> Browse Properties</a></li>
+            <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> My Applications</a></li>
+            <li><a href="my_lease.php"><i class="fas fa-file-contract"></i> My Lease</a></li>
+            <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
+            <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
+            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
+            <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        </ul>
+    </div>
         <!-- Main Content -->
         <div class="main-content">
             <div class="header">

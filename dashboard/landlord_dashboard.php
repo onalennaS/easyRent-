@@ -624,7 +624,7 @@ $inquiries_result = mysqli_query($conn, $inquiries_query);
             <ul class="nav-menu">
                 <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
                 <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php" class="active">Applications</a></li>
+                <li><a href="applications.php">Applications</a></li>
                 <li><a href="add_property.php">Add Property</a></li>
                 <li><a href="maintenance.php">Maintenance</a></li>
                 <li><a href="tenants.php">Tenants</a></li>

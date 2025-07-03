@@ -39,21 +39,118 @@ if ($applications_result) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
     $application_id = $_POST['application_id'];
     $new_status = $_POST['status'];
-    $landlord_notes = $_POST['landlord_notes'] ?? '';
+    $landlord_notes = mysqli_real_escape_string($conn, $_POST['landlord_notes'] ?? '');
     
-    $update_query = "
-        UPDATE rental_applications 
-        SET status = '$new_status', 
-            landlord_notes = '$landlord_notes',
-            reviewed_at = NOW(),
-            reviewed_by = $landlord_id
-        WHERE id = $application_id
-    ";
-    
-    if (mysqli_query($conn, $update_query)) {
-        $success_message = "Application status updated successfully!";
-    } else {
-        $error_message = "Error updating application: " . mysqli_error($conn);
+    // For non-approved statuses
+    if ($new_status != 'approved') {
+        $update_query = "
+            UPDATE rental_applications 
+            SET status = '$new_status', 
+                landlord_notes = '$landlord_notes',
+                reviewed_at = NOW(),
+                reviewed_by = $landlord_id
+            WHERE id = $application_id
+        ";
+        
+        if (mysqli_query($conn, $update_query)) {
+            $success_message = "Application status updated successfully!";
+        } else {
+            $error_message = "Error updating application: " . mysqli_error($conn);
+        }
+    } 
+    // For approved status
+    else {
+        // Get application details
+        $app_query = "SELECT * FROM rental_applications WHERE id = $application_id";
+        $app_result = mysqli_query($conn, $app_query);
+        
+        if (!$app_result) {
+            $error_message = "Error fetching application: " . mysqli_error($conn);
+        } else {
+            $application = mysqli_fetch_assoc($app_result);
+            
+            // Get monthly rent from form submission
+            $monthly_rent = $_POST['monthly_rent'];
+            
+            // Validate monthly rent
+            if (empty($monthly_rent) || !is_numeric($monthly_rent) || $monthly_rent <= 0) {
+                $error_message = "Invalid monthly rent value. Please enter a valid rent amount.";
+            } else {
+                // Update application status first
+                $update_query = "
+                    UPDATE rental_applications 
+                    SET status = '$new_status', 
+                        landlord_notes = '$landlord_notes',
+                        reviewed_at = NOW(),
+                        reviewed_by = $landlord_id
+                    WHERE id = $application_id
+                ";
+                
+                if (mysqli_query($conn, $update_query)) {
+                    // Validate and format move_in_date
+                    $move_in_date = $application['move_in_date'] ?? null;
+                    
+                    if ($move_in_date && strtotime($move_in_date)) {
+                        $move_in_date = date('Y-m-d', strtotime($move_in_date));
+                    } else {
+                        $move_in_date = date('Y-m-d', strtotime('+7 days'));
+                        $error_message = "Invalid move-in date detected. Using fallback date: " . date('M d, Y', strtotime($move_in_date));
+                    }
+                    
+                    // Calculate end date
+                    $end_date = date('Y-m-d', strtotime($move_in_date . " + {$application['lease_duration_months']} months"));
+                    
+                    // Create lease
+                    $stmt = $conn->prepare("
+                        INSERT INTO leases (
+                            property_id, 
+                            tenant_id, 
+                            landlord_id,
+                            application_id,
+                            lease_start_date,
+                            lease_end_date,
+                            monthly_rent,
+                            security_deposit,
+                            status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                    ");
+                    
+                    // Bind parameters
+                    $stmt->bind_param(
+                        "iiiissdd", 
+                        $application['property_id'],
+                        $application['tenant_id'],
+                        $landlord_id,
+                        $application_id,
+                        $move_in_date,
+                        $end_date,
+                        $monthly_rent,  // Use rent from form
+                        $monthly_rent   // Security deposit = 1 month rent
+                    );
+                    
+                    if ($stmt->execute()) {
+                        $lease_id = $stmt->insert_id;
+                        $success_message = "Application approved and lease #$lease_id created!";
+                        
+                        // Send notification to tenant
+                        $tenant_id = $application['tenant_id'];
+                        $property_id = $application['property_id'];
+                        $message = "Your application for property #$property_id has been approved! Please sign your lease agreement.";
+                        
+                        $notif_query = "
+                            INSERT INTO notifications (user_id, message, type, is_read, created_at)
+                            VALUES ($tenant_id, '$message', 'application', 0, NOW())
+                        ";
+                        mysqli_query($conn, $notif_query);
+                    } else {
+                        $error_message = "Lease creation failed: " . $stmt->error;
+                    }
+                    $stmt->close();
+                } else {
+                    $error_message = "Error updating application: " . mysqli_error($conn);
+                }
+            }
+        }
     }
     
     // Refresh applications data
@@ -529,9 +626,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             </div>
             
             <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php">Dashboard</a></li>
+                <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
                 <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php" class="active">Applications</a></li>
+                <li><a href="applications.php">Applications</a></li>
+                <li><a href="add_property.php">Add Property</a></li>
                 <li><a href="maintenance.php">Maintenance</a></li>
                 <li><a href="tenants.php">Tenants</a></li>
                 <li><a href="reports.php">Reports</a></li>
@@ -682,12 +780,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                 
                 <div class="form-group">
                     <label class="form-label">Status</label>
-                    <select name="status" class="form-control" required>
+                    <select name="status" class="form-control" id="statusSelect" required>
                         <option value="pending">Pending</option>
                         <option value="reviewed">Reviewed</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>
                     </select>
+                </div>
+                
+                <div class="form-group" id="rentInputGroup" style="display: none;">
+                    <label class="form-label">Monthly Rent for Lease*</label>
+                    <input type="number" step="0.01" min="0" name="monthly_rent" class="form-control" placeholder="Enter monthly rent amount">
+                    <small class="form-text text-muted">This rent will be used for the new lease</small>
                 </div>
                 
                 <div class="form-group">
@@ -710,6 +814,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         const viewButtons = document.querySelectorAll('.view-details');
         const updateButtons = document.querySelectorAll('.update-status');
         const logoutLink = document.getElementById('logoutLink');
+        const statusSelect = document.getElementById('statusSelect');
+        const rentInputGroup = document.getElementById('rentInputGroup');
         
         // Show modal
         function openModal(modalId) {
@@ -796,6 +902,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             button.addEventListener('click', function() {
                 const appId = this.getAttribute('data-id');
                 document.getElementById('statusApplicationId').value = appId;
+                
+                // Reset form state
+                rentInputGroup.style.display = 'none';
+                statusSelect.value = 'pending';
+                
                 openModal('statusModal');
             });
         });
@@ -811,6 +922,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                     closeModal();
                 }
             });
+        });
+        
+        // Show/hide rent input based on status selection
+        statusSelect.addEventListener('change', function() {
+            if (this.value === 'approved') {
+                rentInputGroup.style.display = 'block';
+            } else {
+                rentInputGroup.style.display = 'none';
+            }
         });
         
         // Logout confirmation
@@ -837,7 +957,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             Swal.fire({
                 icon: 'success',
                 title: 'Success!',
-                text: '<?php echo $success_message; ?>',
+                text: <?= json_encode($success_message) ?>,
                 timer: 3000,
                 showConfirmButton: false
             });
@@ -845,7 +965,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: '<?php echo $error_message; ?>'
+                text: <?= json_encode($error_message) ?>
             });
         <?php endif; ?>
     </script>
