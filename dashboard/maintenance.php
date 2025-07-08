@@ -1,0 +1,1118 @@
+<?php
+session_start();
+
+// Require authentication
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../auth/login.php");
+    exit();
+}
+
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "easyrent_db";
+
+$conn = mysqli_connect($servername, $username, $password, $dbname);
+
+// Check connection
+if (!$conn) {
+    die("Connection failed: " . mysqli_connect_error());
+}
+
+$landlord_id = $_SESSION['user_id'];
+
+// Initialize filter variables
+$property_filter = $_GET['property'] ?? '';
+$status_filter = $_GET['status'] ?? '';
+$priority_filter = $_GET['priority'] ?? '';
+
+// Build the base query with parameterized filtering
+$maintenance_query = "
+    SELECT mr.*, 
+           p.title AS property_title, 
+           p.address AS property_address,
+           CONCAT(u.first_name, ' ', u.last_name) AS tenant_name,
+           u.email AS tenant_email,
+           u.phone AS tenant_phone
+    FROM maintenance_requests mr 
+    JOIN properties p ON mr.property_id = p.id 
+    JOIN users u ON mr.tenant_id = u.id
+    WHERE p.landlord_id = ?
+";
+
+$params = [$landlord_id];
+$types = "i";
+
+// Add filters
+if ($property_filter) {
+    $maintenance_query .= " AND p.id = ?";
+    $params[] = $property_filter;
+    $types .= "i";
+}
+
+if ($status_filter) {
+    $maintenance_query .= " AND mr.status = ?";
+    $params[] = $status_filter;
+    $types .= "s";
+}
+
+if ($priority_filter) {
+    $maintenance_query .= " AND mr.priority = ?";
+    $params[] = $priority_filter;
+    $types .= "s";
+}
+
+$maintenance_query .= " ORDER BY mr.created_at DESC";
+
+// Prepare and execute the query
+$stmt = mysqli_prepare($conn, $maintenance_query);
+mysqli_stmt_bind_param($stmt, $types, ...$params);
+mysqli_stmt_execute($stmt);
+$maintenance_result = mysqli_stmt_get_result($stmt);
+
+// Get landlord properties for filtering
+$properties_query = "SELECT id, title FROM properties WHERE landlord_id = ?";
+$stmt_properties = mysqli_prepare($conn, $properties_query);
+mysqli_stmt_bind_param($stmt_properties, "i", $landlord_id);
+mysqli_stmt_execute($stmt_properties);
+$properties_result = mysqli_stmt_get_result($stmt_properties);
+
+// Handle status update
+if (isset($_POST['update_status'])) {
+    $request_id = intval($_POST['request_id']);
+    $new_status = mysqli_real_escape_string($conn, $_POST['status']);
+    
+    $update_query = "UPDATE maintenance_requests SET status = ? WHERE id = ?";
+    $stmt = mysqli_prepare($conn, $update_query);
+    mysqli_stmt_bind_param($stmt, "si", $new_status, $request_id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        $_SESSION['success_message'] = "Maintenance status updated successfully!";
+    } else {
+        $_SESSION['error_message'] = "Error updating status: " . mysqli_error($conn);
+    }
+    header("Location: maintenance.php");
+    exit();
+}
+
+// Handle vendor assignment
+if (isset($_POST['assign_vendor'])) {
+    $request_id = intval($_POST['request_id']);
+    $vendor_name = mysqli_real_escape_string($conn, $_POST['contractor_assigned']);
+    $vendor_contact = mysqli_real_escape_string($conn, $_POST['contractor_contact']);
+    $cost_estimate = floatval($_POST['estimated_cost']);
+    
+    $update_query = "UPDATE maintenance_requests 
+                    SET contractor_assigned = ?, 
+                        contractor_contact = ?,
+                        estimated_cost = ?,
+                        status = 'assigned'
+                    WHERE id = ?";
+    
+    $stmt = mysqli_prepare($conn, $update_query);
+    mysqli_stmt_bind_param($stmt, "ssdi", $vendor_name, $vendor_contact, $cost_estimate, $request_id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        $_SESSION['success_message'] = "Contractor assigned successfully!";
+    } else {
+        $_SESSION['error_message'] = "Error assigning contractor: " . mysqli_error($conn);
+    }
+    header("Location: maintenance.php");
+    exit();
+}
+
+// Handle cost update
+if (isset($_POST['update_cost'])) {
+    $request_id = intval($_POST['request_id']);
+    $actual_cost = floatval($_POST['actual_cost']);
+    
+    $update_query = "UPDATE maintenance_requests 
+                    SET actual_cost = ?
+                    WHERE id = ?";
+    
+    $stmt = mysqli_prepare($conn, $update_query);
+    mysqli_stmt_bind_param($stmt, "di", $actual_cost, $request_id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        $_SESSION['success_message'] = "Actual cost updated successfully!";
+    } else {
+        $_SESSION['error_message'] = "Error updating cost: " . mysqli_error($conn);
+    }
+    header("Location: maintenance.php");
+    exit();
+}
+
+// Handle notes update
+if (isset($_POST['update_notes'])) {
+    $request_id = intval($_POST['request_id']);
+    $landlord_notes = mysqli_real_escape_string($conn, $_POST['landlord_notes']);
+    
+    $update_query = "UPDATE maintenance_requests 
+                    SET landlord_notes = ?
+                    WHERE id = ?";
+    
+    $stmt = mysqli_prepare($conn, $update_query);
+    mysqli_stmt_bind_param($stmt, "si", $landlord_notes, $request_id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        $_SESSION['success_message'] = "Notes updated successfully!";
+    } else {
+        $_SESSION['error_message'] = "Error updating notes: " . mysqli_error($conn);
+    }
+    header("Location: maintenance.php");
+    exit();
+}
+
+// Calculate statistics
+$stats_query = "SELECT 
+    SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
+    SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) AS assigned_count,
+    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_count,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+    FROM maintenance_requests mr
+    JOIN properties p ON mr.property_id = p.id
+    WHERE p.landlord_id = ?";
+
+$stmt_stats = mysqli_prepare($conn, $stats_query);
+mysqli_stmt_bind_param($stmt_stats, "i", $landlord_id);
+mysqli_stmt_execute($stmt_stats);
+$stats_result = mysqli_stmt_get_result($stmt_stats);
+$stats = mysqli_fetch_assoc($stats_result);
+
+// Function to format date
+function formatDate($date) {
+    return $date ? date('M j, Y H:i', strtotime($date)) : 'N/A';
+}
+
+// Function to format currency
+function formatCurrency($amount) {
+    return $amount ? 'R' . number_format($amount, 2) : 'N/A';
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance - Easy Rent</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+        /* Consolidated CSS styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa; color: #333; line-height: 1.6; }
+        
+        /* Top Navigation */
+        .top-nav { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 0 2rem; position: fixed; top: 0; left: 0; right: 0; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; height: 70px; max-width: 1400px; margin: 0 auto; }
+        .logo { font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; gap: 0.5rem; }
+        .nav-menu { display: flex; list-style: none; gap: 2rem; align-items: center; }
+        .nav-menu a { color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 8px; transition: all 0.3s ease; font-weight: 500; }
+        .nav-menu a:hover, .nav-menu a.active { background: rgba(255,255,255,0.2); }
+        .user-profile { display: flex; align-items: center; gap: 1rem; }
+        .profile-avatar { width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; }
+        
+        /* Main Content */
+        .main-content { margin-top: 70px; padding: 2rem; max-width: 1400px; margin-left: auto; margin-right: auto; }
+        
+        /* Hero Section */
+        .hero-section { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%); border-radius: 20px; padding: 2rem; color: white; margin-bottom: 2rem; position: relative; overflow: hidden; }
+        .hero-content { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .hero-title { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .hero-subtitle { font-size: 1.1rem; opacity: 0.9; }
+        .quick-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .quick-action-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 0.75rem 1.5rem; border-radius: 12px; text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .quick-action-btn:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
+        
+        /* Alerts */
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .alert-success { background: #dcfce7; color: #166534; }
+        .alert-error { background: #fee2e2; color: #991b1b; }
+        
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card { background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; transition: all 0.3s ease; position: relative; overflow: hidden; text-align: center; }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--accent-color); }
+        .stat-card.open { --accent-color: #3b82f6; }
+        .stat-card.assigned { --accent-color: #f59e0b; }
+        .stat-card.progress { --accent-color: #8b5cf6; }
+        .stat-card.completed { --accent-color: #10b981; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: #1e293b; margin-bottom: 0.5rem; }
+        .stat-label { color: #64748b; font-weight: 500; }
+        
+        /* Filters */
+        .filters { background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; margin-bottom: 2rem; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1rem; }
+        .filter-group { flex: 1; min-width: 200px; }
+        .filter-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #475569; }
+        .filter-control { width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; background: white; }
+        .filter-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 0.5rem; }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-outline { background: transparent; border: 1px solid #3b82f6; color: #3b82f6; }
+        .btn-outline:hover { background: rgba(59, 130, 246, 0.1); }
+        
+        /* Requests List */
+        .requests-list { background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; }
+        .card-title { font-size: 1.5rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 0.75rem; }
+        .request-item { padding: 1.5rem; border-radius: 12px; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1.5rem; border-left: 4px solid; transition: all 0.3s ease; }
+        .request-item:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .request-item.open { border-left-color: #3b82f6; }
+        .request-item.assigned { border-left-color: #f59e0b; }
+        .request-item.in_progress { border-left-color: #8b5cf6; }
+        .request-item.completed { border-left-color: #10b981; }
+        .request-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .request-title { font-size: 1.25rem; font-weight: 600; color: #1e293b; }
+        .status-badge { padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.875rem; font-weight: 600; text-transform: capitalize; }
+        .status-open { background: #dbeafe; color: #1d4ed8; }
+        .status-assigned { background: #fef3c7; color: #92400e; }
+        .status-in_progress { background: #ede9fe; color: #5b21b6; }
+        .status-completed { background: #dcfce7; color: #166534; }
+        .request-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+        .meta-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .meta-label { font-size: 0.875rem; color: #64748b; font-weight: 500; }
+        .meta-value { font-size: 1rem; font-weight: 500; color: #1e293b; }
+        .request-description { background: #f1f5f9; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; color: #334155; line-height: 1.7; }
+        .request-actions { display: flex; flex-wrap: wrap; gap: 1rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb; }
+        
+        /* Empty State */
+        .empty-state { text-align: center; padding: 3rem 1rem; color: #64748b; }
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; color: #cbd5e1; }
+        .empty-state h3 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #475569; }
+        
+        /* Modals - Updated for centering and scrolling */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.5); 
+            z-index: 1000; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .modal-content { 
+            background: white; 
+            border-radius: 16px; 
+            width: 100%; 
+            max-width: 500px; /* Decreased width */
+            max-height: 90vh; /* Ensure it doesn't exceed viewport height */
+            box-shadow: 0 10px 50px rgba(0,0,0,0.3); 
+            overflow: hidden;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header { 
+            padding: 1.5rem; 
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+            color: white; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .modal-header h3 { 
+            font-size: 1.5rem; 
+            font-weight: 600; 
+            margin: 0;
+        }
+        
+        .close-modal { 
+            background: none; 
+            border: none; 
+            color: white; 
+            font-size: 1.75rem; 
+            cursor: pointer; 
+            padding: 0;
+            line-height: 1;
+            transition: opacity 0.2s ease;
+        }
+        
+        .close-modal:hover {
+            opacity: 0.7;
+        }
+        
+        .modal-body { 
+            padding: 1.5rem; 
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .modal-section { 
+            margin-bottom: 30px; 
+        }
+        
+        .modal-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .modal-section h4 { 
+            color: #2c3e50; 
+            margin-bottom: 15px; 
+            font-size: 1.2rem; 
+            border-bottom: 2px solid #ecf0f1; 
+            padding-bottom: 10px; 
+        }
+        
+        .details-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            margin-bottom: 20px; 
+        }
+        
+        .detail-group { 
+            display: flex; 
+            flex-direction: column; 
+            padding: 15px; 
+            background: #f8f9fa; 
+            border-radius: 8px; 
+        }
+        
+        .detail-label { 
+            font-size: 12px; 
+            color: #7f8c8d; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            margin-bottom: 5px; 
+        }
+        
+        .detail-value { 
+            font-size: 14px; 
+            color: #2c3e50; 
+            font-weight: 500; 
+        }
+        
+        .form-group { 
+            margin-bottom: 20px; 
+        }
+        
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #2c3e50; 
+        }
+        
+        .form-control { 
+            width: 100%; 
+            padding: 12px; 
+            border: 2px solid #e1e8ed; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            transition: all 0.3s ease; 
+        }
+        
+        .form-control:focus { 
+            outline: none; 
+            border-color: #3498db; 
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); 
+        }
+        
+        .notes-textarea { 
+            width: 100%; 
+            padding: 12px; 
+            border: 2px solid #e1e8ed; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            min-height: 100px; 
+            resize: vertical; 
+            font-family: inherit; 
+        }
+        
+        .notes-textarea:focus {
+            outline: none; 
+            border-color: #3498db; 
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); 
+        }
+        
+        /* Images displayed in pairs - UPDATED */
+        .request-images { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; /* Always 2 columns */
+            gap: 15px; 
+            margin-top: 20px; 
+        }
+        
+        .request-image { 
+            cursor: pointer; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            transition: transform 0.3s ease; 
+        }
+        
+        .request-image:hover { 
+            transform: scale(1.05); 
+        }
+        
+        .request-image img { 
+            width: 100%; 
+            height: 100px; /* Slightly smaller height for pairs */
+            object-fit: cover; 
+        }
+        
+        .action-form { 
+            margin-bottom: 20px; 
+        }
+        
+        .form-actions { 
+            display: flex; 
+            gap: 15px; 
+            justify-content: flex-end; 
+            margin-top: 20px; 
+        }
+        
+        /* Image Modal Specific Styles */
+        #imageModal .modal-content {
+            max-width: 80vw;
+            max-height: 80vh;
+        }
+        
+        #imageModal .modal-body {
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #modalImage {
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .request-meta { grid-template-columns: 1fr; }
+            .details-grid { grid-template-columns: 1fr; }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content { padding: 1rem; }
+            .hero-title { font-size: 1.75rem; }
+            .hero-subtitle { font-size: 1rem; }
+            .nav-menu { gap: 0.75rem; }
+            .card-title { font-size: 1.25rem; }
+            .filter-row { flex-direction: column; }
+            
+            .modal-content {
+                max-width: 95vw;
+                margin: 10px;
+            }
+            
+            .modal-header {
+                padding: 1rem;
+            }
+            
+            .modal-body {
+                padding: 1rem;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .nav-container { padding: 0 1rem; }
+            .hero-section { padding: 1.5rem 1rem; }
+            .request-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .request-actions { flex-direction: column; align-items: flex-start; }
+            .action-form { width: 100%; }
+            
+            .form-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .btn {
+                justify-content: center;
+            }
+            
+            /* Keep pairs even on mobile */
+            .request-images { 
+                grid-template-columns: 1fr 1fr; 
+                gap: 10px; 
+            }
+            
+            .request-image img { 
+                height: 80px; /* Smaller height on mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <div class="logo">
+                <i class="fas fa-home"></i>
+                Easy Rent
+            </div>
+            
+            <ul class="nav-menu">
+                <li><a href="landlord_dashboard.php">Dashboard</a></li>
+                <li><a href="my_properties.php">My Properties</a></li>
+                <li><a href="applications.php">Applications</a></li>
+                <li><a href="add_property.php">Add Property</a></li>
+                <li><a href="maintenance.php" class="active">Maintenance</a></li>
+                <li><a href="tenants.php">Tenants</a></li>
+                <li><a href="reports.php">Reports</a></li>
+            </ul>
+            
+            <div class="user-profile">
+                <span>Welcome, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></span>
+                <div class="profile-avatar">
+                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
+                </div>
+                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <div class="hero-content">
+                <div>
+                    <h1 class="hero-title">Maintenance Requests</h1>
+                    <p class="hero-subtitle">Manage maintenance requests for your properties</p>
+                </div>
+                <div class="quick-actions">
+                    <a href="#" class="quick-action-btn">
+                        <i class="fas fa-file-export"></i>
+                        Export Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <?php if (isset($_SESSION['success_message'])): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <?php echo $_SESSION['success_message']; unset($_SESSION['success_message']); ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['error_message'])): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i>
+                <?php echo $_SESSION['error_message']; unset($_SESSION['error_message']); ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card open">
+                <div class="stat-value"><?php echo $stats['open_count'] ?? 0; ?></div>
+                <div class="stat-label">Open Requests</div>
+            </div>
+            <div class="stat-card assigned">
+                <div class="stat-value"><?php echo $stats['assigned_count'] ?? 0; ?></div>
+                <div class="stat-label">Assigned to Contractors</div>
+            </div>
+            <div class="stat-card progress">
+                <div class="stat-value"><?php echo $stats['in_progress_count'] ?? 0; ?></div>
+                <div class="stat-label">In Progress</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-value"><?php echo $stats['completed_count'] ?? 0; ?></div>
+                <div class="stat-label">Completed</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <form method="GET" class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="property">Property</label>
+                    <select id="property" name="property" class="filter-control">
+                        <option value="">All Properties</option>
+                        <?php while ($property = mysqli_fetch_assoc($properties_result)): ?>
+                            <?php $selected = $property['id'] == $property_filter ? 'selected' : ''; ?>
+                            <option value="<?php echo $property['id']; ?>" <?php echo $selected; ?>>
+                                <?php echo htmlspecialchars($property['title']); ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status">Status</label>
+                    <select id="status" name="status" class="filter-control">
+                        <option value="">All Statuses</option>
+                        <option value="open" <?php echo $status_filter === 'open' ? 'selected' : ''; ?>>Open</option>
+                        <option value="assigned" <?php echo $status_filter === 'assigned' ? 'selected' : ''; ?>>Assigned</option>
+                        <option value="in_progress" <?php echo $status_filter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                        <option value="completed" <?php echo $status_filter === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="priority">Priority</label>
+                    <select id="priority" name="priority" class="filter-control">
+                        <option value="">All Priorities</option>
+                        <option value="low" <?php echo $priority_filter === 'low' ? 'selected' : ''; ?>>Low</option>
+                        <option value="medium" <?php echo $priority_filter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                        <option value="high" <?php echo $priority_filter === 'high' ? 'selected' : ''; ?>>High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button type="button" class="btn btn-outline" onclick="resetFilters()">
+                    <i class="fas fa-sync"></i>
+                    Reset Filters
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter"></i>
+                    Apply Filters
+                </button>
+            </div>
+        </form>
+
+        <!-- Requests List -->
+        <div class="requests-list">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-tools"></i>
+                    Maintenance Requests
+                </h2>
+            </div>
+
+            <?php if ($maintenance_result && mysqli_num_rows($maintenance_result) > 0): ?>
+                <?php while ($request = mysqli_fetch_assoc($maintenance_result)): 
+                    // Get images for this request
+                    $images_query = "SELECT * FROM maintenance_images 
+                                    WHERE maintenance_request_id = {$request['id']}";
+                    $images_result = mysqli_query($conn, $images_query);
+                    $images = [];
+                    if ($images_result) {
+                        while ($image = mysqli_fetch_assoc($images_result)) {
+                            $images[] = $image['image_path'];
+                        }
+                    }
+                ?>
+                    <div class="request-item <?php echo $request['status']; ?>">
+                        <div class="request-header">
+                            <h3 class="request-title"><?php echo htmlspecialchars($request['title']); ?></h3>
+                            <span class="status-badge status-<?php echo $request['status']; ?>">
+                                <?php echo ucfirst(str_replace('_', ' ', $request['status'])); ?>
+                            </span>
+                        </div>
+
+                        <div class="request-meta">
+                            <div class="meta-group">
+                                <span class="meta-label">Property</span>
+                                <span class="meta-value"><?php echo htmlspecialchars($request['property_title']); ?></span>
+                            </div>
+                            <div class="meta-group">
+                                <span class="meta-label">Tenant</span>
+                                <span class="meta-value"><?php echo htmlspecialchars($request['tenant_name']); ?></span>
+                            </div>
+                            <div class="meta-group">
+                                <span class="meta-label">Reported On</span>
+                                <span class="meta-value"><?php echo formatDate($request['reported_date']); ?></span>
+                            </div>
+                            <div class="meta-group">
+                                <span class="meta-label">Priority</span>
+                                <span class="meta-value"><?php echo ucfirst($request['priority']); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="request-description">
+                            <?php echo nl2br(htmlspecialchars($request['description'])); ?>
+                        </div>
+
+                        <?php if (!empty($images)): ?>
+                            <div class="request-images">
+                                <?php foreach ($images as $image): ?>
+                                    <div class="request-image" onclick="openImageModal('<?php echo $image; ?>')">
+                                        <img src="<?php echo $image; ?>" alt="Maintenance photo">
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="request-actions">
+                            <button class="btn btn-primary" onclick="openDetailsModal(<?php echo $request['id']; ?>)">
+                                <i class="fas fa-eye"></i>
+                                View Details
+                            </button>
+                            <button class="btn btn-warning" onclick="openManageModal(<?php echo $request['id']; ?>)">
+                                <i class="fas fa-cog"></i>
+                                Manage Request
+                            </button>
+                        </div>
+                    </div>
+                <?php endwhile; ?>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>No Maintenance Requests</h3>
+                    <p>You don't have any maintenance requests at this time.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="detailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="detailsModalTitle">Request Details</h3>
+                <button class="close-modal" onclick="closeDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="detailsModalBody"></div>
+        </div>
+    </div>
+
+    <div id="manageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="manageModalTitle">Manage Request</h3>
+                <button class="close-modal" onclick="closeManageModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="manageModalBody"></div>
+        </div>
+    </div>
+
+    <div id="imageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Maintenance Photo</h3>
+                <button class="close-modal" onclick="closeImageModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <img id="modalImage" src="" alt="Maintenance Photo" style="width: 100%; border-radius: 8px;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Maintenance requests data
+        const maintenanceRequests = <?php 
+            $requests = [];
+            if ($maintenance_result && mysqli_num_rows($maintenance_result) > 0) {
+                mysqli_data_seek($maintenance_result, 0);
+                while ($request = mysqli_fetch_assoc($maintenance_result)) {
+                    $images_query = "SELECT image_path FROM maintenance_images 
+                                    WHERE maintenance_request_id = {$request['id']}";
+                    $images_result = mysqli_query($conn, $images_query);
+                    $images = [];
+                    if ($images_result) {
+                        while ($image = mysqli_fetch_assoc($images_result)) {
+                            $images[] = $image['image_path'];
+                        }
+                    }
+                    
+                    $requests[$request['id']] = [
+                        'id' => $request['id'],
+                        'title' => $request['title'],
+                        'status' => $request['status'],
+                        'property' => $request['property_title'],
+                        'tenant' => $request['tenant_name'],
+                        'reported_date' => formatDate($request['reported_date']),
+                        'priority' => $request['priority'],
+                        'category' => $request['category'],
+                        'description' => $request['description'],
+                        'contractor_assigned' => $request['contractor_assigned'] ?? '',
+                        'contractor_contact' => $request['contractor_contact'] ?? '',
+                        'estimated_cost' => $request['estimated_cost'] ?? '',
+                        'actual_cost' => $request['actual_cost'] ?? '',
+                        'landlord_notes' => $request['landlord_notes'] ?? '',
+                        'tenant_rating' => $request['tenant_rating'] ?? '',
+                        'tenant_feedback' => $request['tenant_feedback'] ?? '',
+                        'acknowledged_date' => formatDate($request['acknowledged_date']),
+                        'started_date' => formatDate($request['started_date']),
+                        'completed_date' => formatDate($request['completed_date']),
+                        'created_at' => formatDate($request['created_at']),
+                        'updated_at' => formatDate($request['updated_at']),
+                        'images' => $images
+                    ];
+                }
+            }
+            echo json_encode($requests);
+        ?>;
+
+        // Modal functions
+        function openDetailsModal(requestId) {
+            const request = maintenanceRequests[requestId];
+            if (!request) return;
+
+            const modal = document.getElementById('detailsModal');
+            const title = document.getElementById('detailsModalTitle');
+            const body = document.getElementById('detailsModalBody');
+
+            title.textContent = request.title;
+            
+            let imagesHTML = '';
+            if (request.images.length > 0) {
+                imagesHTML = `
+                    <div class="modal-section">
+                        <h4>Attached Images</h4>
+                        <div class="request-images">
+                            ${request.images.map(img => `
+                                <div class="request-image" onclick="openImageModal('${img}')">
+                                    <img src="${img}" alt="Maintenance photo">
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            body.innerHTML = `
+                <div class="modal-section">
+                    <h4>Request Information</h4>
+                    <div class="details-grid">
+                        <div class="detail-group">
+                            <span class="detail-label">Request ID</span>
+                            <span class="detail-value">${request.id}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Status</span>
+                            <span class="detail-value">
+                                <span class="status-badge status-${request.status}">
+                                    ${request.status.charAt(0).toUpperCase() + request.status.slice(1).replace('_', ' ')}
+                                </span>
+                            </span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Property</span>
+                            <span class="detail-value">${request.property}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Tenant</span>
+                            <span class="detail-value">${request.tenant}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Reported Date</span>
+                            <span class="detail-value">${request.reported_date}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Priority</span>
+                            <span class="detail-value">${request.priority}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Category</span>
+                            <span class="detail-value">${request.category || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Description</h4>
+                    <div class="request-description">
+                        ${request.description.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+
+                ${request.contractor_assigned ? `
+                <div class="modal-section">
+                    <h4>Contractor Information</h4>
+                    <div class="details-grid">
+                        <div class="detail-group">
+                            <span class="detail-label">Contractor</span>
+                            <span class="detail-value">${request.contractor_assigned}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Contact</span>
+                            <span class="detail-value">${request.contractor_contact}</span>
+                        </div>
+                        <div class="detail-group">
+                            <span class="detail-label">Estimated Cost</span>
+                            <span class="detail-value">R${parseFloat(request.estimated_cost).toFixed(2)}</span>
+                        </div>
+                        ${request.actual_cost ? `
+                        <div class="detail-group">
+                            <span class="detail-label">Actual Cost</span>
+                            <span class="detail-value">R${parseFloat(request.actual_cost).toFixed(2)}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                ` : ''}
+
+                ${request.landlord_notes ? `
+                <div class="modal-section">
+                    <h4>Landlord Notes</h4>
+                    <div class="request-description">
+                        ${request.landlord_notes.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+                ` : ''}
+
+                ${imagesHTML}
+            `;
+
+            modal.style.display = 'block';
+        }
+
+        function openManageModal(requestId) {
+            const request = maintenanceRequests[requestId];
+            if (!request) return;
+
+            const modal = document.getElementById('manageModal');
+            const title = document.getElementById('manageModalTitle');
+            const body = document.getElementById('manageModalBody');
+
+            title.textContent = `Manage: ${request.title}`;
+            
+            body.innerHTML = `
+                <div class="modal-section">
+                    <h4>Update Status</h4>
+                    <form method="POST" class="action-form">
+                        <input type="hidden" name="request_id" value="${request.id}">
+                        <div class="form-group">
+                            <label for="status">Status</label>
+                            <select name="status" class="form-control" required>
+                                <option value="open" ${request.status === 'open' ? 'selected' : ''}>Open</option>
+                                <option value="assigned" ${request.status === 'assigned' ? 'selected' : ''}>Assigned</option>
+                                <option value="in_progress" ${request.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                <option value="completed" ${request.status === 'completed' ? 'selected' : ''}>Completed</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" name="update_status" class="btn btn-primary">
+                                <i class="fas fa-sync"></i>
+                                Update Status
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Contractor Assignment</h4>
+                    <form method="POST" class="action-form">
+                        <input type="hidden" name="request_id" value="${request.id}">
+                        <div class="form-group">
+                            <label for="contractor_assigned">Contractor Name</label>
+                            <input type="text" name="contractor_assigned" class="form-control" 
+                                   placeholder="Enter contractor name" required
+                                   value="${request.contractor_assigned || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="contractor_contact">Contractor Contact</label>
+                            <input type="text" name="contractor_contact" class="form-control" 
+                                   placeholder="Enter contact info" required
+                                   value="${request.contractor_contact || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="estimated_cost">Estimated Cost (R)</label>
+                            <input type="number" name="estimated_cost" class="form-control" 
+                                   placeholder="Enter estimate" step="0.01" min="0" required
+                                   value="${request.estimated_cost || ''}">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" name="assign_vendor" class="btn btn-warning">
+                                <i class="fas fa-user-tie"></i>
+                                Assign Contractor
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Cost Management</h4>
+                    <form method="POST" class="action-form">
+                        <input type="hidden" name="request_id" value="${request.id}">
+                        <div class="form-group">
+                            <label for="actual_cost">Actual Cost (R)</label>
+                            <input type="number" name="actual_cost" class="form-control" 
+                                   placeholder="Enter actual cost" step="0.01" min="0"
+                                   value="${request.actual_cost || ''}">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" name="update_cost" class="btn btn-success">
+                                <i class="fas fa-money-bill-wave"></i>
+                                Update Cost
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Landlord Notes</h4>
+                    <form method="POST" class="action-form">
+                        <input type="hidden" name="request_id" value="${request.id}">
+                        <div class="form-group">
+                            <label for="landlord_notes">Notes</label>
+                            <textarea name="landlord_notes" class="notes-textarea" 
+                                      placeholder="Add notes about this maintenance request">${request.landlord_notes || ''}</textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" name="update_notes" class="btn btn-primary">
+                                <i class="fas fa-edit"></i>
+                                Update Notes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            modal.style.display = 'block';
+        }
+
+        function closeDetailsModal() {
+            document.getElementById('detailsModal').style.display = 'none';
+        }
+
+        function closeManageModal() {
+            document.getElementById('manageModal').style.display = 'none';
+        }
+
+        function openImageModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = imageSrc;
+            modal.style.display = 'block';
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        function resetFilters() {
+            document.getElementById('property').value = '';
+            document.getElementById('status').value = '';
+            document.getElementById('priority').value = '';
+            document.querySelector('.filters').submit();
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const modals = ['detailsModal', 'manageModal', 'imageModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        };
+
+        // Escape key to close modals
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetailsModal();
+                closeManageModal();
+                closeImageModal();
+            }
+        });
+    </script>
+</body>
+</html>
