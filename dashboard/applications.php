@@ -708,9 +708,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                         <th>Property</th>
                         <th>Tenant</th>
                         <th>Application Date</th>
-                        <th>Move-in Date</th>
-                        <th>Lease Duration</th>
-                        <th>Rent Offer</th>
+                      
+                        
+                       
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -726,18 +726,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                                 <span class="tenant-contact"><?php echo htmlspecialchars($app['phone']); ?></span>
                             </td>
                             <td><?php echo date('M d, Y', strtotime($app['application_date'])); ?></td>
-                            <td><?php echo date('M d, Y', strtotime($app['move_in_date'])); ?></td>
-                            <td><?php echo $app['lease_duration_months']; ?> months</td>
-                            <td>R<?php echo number_format($app['monthly_rent'], 2); ?></td>
+                           
+                           
+                           
                             <td>
                                 <span class="status-badge status-<?php echo $app['status']; ?>">
                                     <?php echo ucfirst($app['status']); ?>
                                 </span>
                             </td>
                             <td class="application-actions">
-                                <button class="btn btn-secondary view-details" data-id="<?php echo $app['id']; ?>">
-                                    <i class="fas fa-eye"></i>
-                                </button>
+                                
                                 <button class="btn btn-warning update-status" data-id="<?php echo $app['id']; ?>">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -755,18 +753,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         <?php endif; ?>
     </div>
     
-    <!-- Application Details Modal -->
-    <div class="modal" id="detailsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Application Details</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div id="modalDetailsContent">
-                <!-- Content will be loaded via JavaScript -->
-            </div>
-        </div>
-    </div>
+   
     
     <!-- Update Status Modal -->
     <div class="modal" id="statusModal">
@@ -829,73 +816,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             });
         }
         
-        // View details button click
-        viewButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const appId = this.getAttribute('data-id');
-                // In a real implementation, we would fetch application details via AJAX
-                // For this example, we'll just show static content
-                document.getElementById('modalDetailsContent').innerHTML = `
-                    <div class="application-details">
-                        <div class="form-group">
-                            <label class="form-label">Application ID</label>
-                            <p>#${appId}</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Property</label>
-                            <p>Downtown Apartment</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Tenant</label>
-                            <p>John Doe</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Application Date</label>
-                            <p>May 15, 2023</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Move-in Date</label>
-                            <p>June 1, 2023</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Lease Duration</label>
-                            <p>12 months</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Rent Offer</label>
-                            <p>R12,500/month</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Security Deposit</label>
-                            <p>R12,500</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Tenant Notes</label>
-                            <p>I'm looking for a quiet apartment close to downtown. I work remotely so a good internet connection is important.</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Landlord Notes</label>
-                            <p>Good candidate - employed, good references. Scheduled viewing for May 20.</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Last Reviewed</label>
-                            <p>May 16, 2023 by Landlord</p>
-                        </div>
-                    </div>
-                `;
-                openModal('detailsModal');
-            });
-        });
+        
         
         // Update status button click
         updateButtons.forEach(button => {
