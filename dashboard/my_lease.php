@@ -611,6 +611,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                 </div>
             </div>
         </div>
+        
 
         <?php if (isset($_SESSION['success_message'])): ?>
             <div class="alert alert-success" id="successAlert">

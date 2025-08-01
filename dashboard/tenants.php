@@ -24,6 +24,7 @@ if (!$conn) {
 $landlord_id = (int)$_SESSION['user_id'];
 
 // Fetch approved tenants with lease information - updated to include all approved applications
+// Fetch approved tenants with lease information - updated to include all approved applications
 $approved_tenants_query = "
     SELECT 
         u.id AS tenant_id,
@@ -49,9 +50,10 @@ $approved_tenants_query = "
     FROM rental_applications a
     JOIN properties p ON a.property_id = p.id
     JOIN users u ON a.tenant_id = u.id
-    LEFT JOIN leases l ON a.id = l.application_id AND l.status != 'terminated'
+    LEFT JOIN leases l ON a.id = l.application_id
     WHERE p.landlord_id = $landlord_id
     AND a.status = 'approved'
+    AND (l.id IS NULL OR l.status != 'terminated')
     ORDER BY 
         u.last_name ASC,
         u.first_name ASC,
@@ -265,7 +267,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         $error_message = "Please provide a valid signature";
     }
 }
+
+// Handle lease termination
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
+    $lease_id = intval($_POST['lease_id']);
+    $termination_reason = mysqli_real_escape_string($conn, $_POST['termination_reason']);
+    $termination_date = mysqli_real_escape_string($conn, $_POST['termination_date']);
+    
+    // Update lease status to terminated
+    $update_query = "UPDATE leases SET 
+                    status = 'terminated',
+                    termination_reason = '$termination_reason',
+                    termination_date = '$termination_date'
+                    WHERE id = $lease_id AND landlord_id = $landlord_id";
+    
+    if (mysqli_query($conn, $update_query)) {
+        $success_message = "Lease agreement terminated successfully!";
+        // Refresh tenants data
+        $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
+        $approved_tenants = [];
+        if ($approved_tenants_result) {
+            while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
+                $approved_tenants[] = $row;
+            }
+        }
+    } else {
+        $error_message = "Error terminating lease: " . mysqli_error($conn);
+    }
+}
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -1116,6 +1147,151 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         margin-bottom: 1.5rem;
     }
 }
+   /* Add styles for termination modal */
+        .termination-reason {
+            margin-top: 1rem;
+        }
+        
+        .termination-reason textarea {
+            min-height: 100px;
+        }
+        .header-buttons {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Style for terminated leases button */
+.btn-terminated {
+    background-color: #6b7280;
+    color: white;
+}
+
+.btn-terminated:hover {
+    background-color: #4b5563;
+}
+/* Table Styles */
+.tenant-table-container {
+    overflow-x: auto;
+    margin-bottom: 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+}
+
+.tenant-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tenant-table th {
+    background-color: #f1f5f9;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #1e293b;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.tenant-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.tenant-table tr:last-child td {
+    border-bottom: none;
+}
+
+.tenant-table tr:hover {
+    background-color: #f8fafc;
+}
+
+.tenant-info-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.tenant-avatar-small {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.tenant-id {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+.property-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.property-address {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.table-actions .btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+/* Responsive table */
+@media (max-width: 1200px) {
+    .tenant-table th:nth-child(5),
+    .tenant-table td:nth-child(5),
+    .tenant-table th:nth-child(6),
+    .tenant-table td:nth-child(6) {
+        display: none;
+    }
+}
+
+@media (max-width: 992px) {
+    .tenant-table th:nth-child(4),
+    .tenant-table td:nth-child(4),
+    .tenant-table th:nth-child(7),
+    .tenant-table td:nth-child(7) {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .tenant-table th:nth-child(3),
+    .tenant-table td:nth-child(3) {
+        display: none;
+    }
+    
+    .tenant-info-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .table-actions {
+        flex-direction: column;
+    }
+    
+    .table-actions .btn {
+        width: 100%;
+    }
+}
     </style>
 </head>
 <body>
@@ -1153,15 +1329,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
     <div class="main-content">
         <!-- Page Header -->
         <div class="page-header">
-            <h1 class="page-title">
-                <i class="fas fa-users"></i>
-                Approved Tenants
-            </h1>
-            <button class="btn btn-primary" id="createTemplateBtn">
-                <i class="fas fa-file-contract"></i>
-                Create Lease Template
-            </button>
-        </div>
+    <h1 class="page-title">
+        <i class="fas fa-users"></i>
+        Approved Tenants
+    </h1>
+    <div class="header-buttons">
+        <a href="terminated_leases.php" class="btn btn-secondary">
+            <i class="fas fa-file-contract"></i>
+            View Terminated Leases
+        </a>
+        <button class="btn btn-primary" id="createTemplateBtn">
+            <i class="fas fa-file-contract"></i>
+            Create Lease Template
+        </button>
+    </div>
+</div>
 
         <?php if (isset($success_message)): ?>
             <div class="alert alert-success">
@@ -1177,8 +1359,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             </div>
         <?php endif; ?>
 
-        <!-- Tenant Cards -->
-        <div class="tenant-cards">
+<!-- Replace the entire tenant-cards div with this table -->
+<div class="tenant-table-container">
+    <table class="tenant-table">
+        <thead>
+            <tr>
+                <th>Tenant</th>
+                <th>Contact</th>
+                <th>Property</th>
+                <th>Application Date</th>
+                <th>Lease Status</th>
+                <th>Lease Period</th>
+                <th>Rent Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
             <?php if (!empty($grouped_tenants)): ?>
                 <?php foreach ($grouped_tenants as $tenant_id => $tenant_data): ?>
                     <?php 
@@ -1186,126 +1382,130 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                     $applications = $tenant_data['applications'];
                     ?>
                     
-                    <div class="tenant-card">
-                        <div class="tenant-header">
-                            <div class="tenant-avatar">
-                                <?php echo strtoupper(substr($tenant_info['name'], 0, 1)); ?>
-                            </div>
-                            <div class="tenant-info">
-                                <h3><?php echo htmlspecialchars($tenant_info['name']); ?></h3>
-                                <p>Tenant ID: #<?php echo htmlspecialchars($tenant_info['id']); ?></p>
-                                <?php if ($tenant_info['approved_app_count'] > 1): ?>
-                                    <p class="multiple-apps-badge">
-                                        <span class="badge"><?php echo $tenant_info['approved_app_count']; ?> approved applications</span>
-                                    </p>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        
-                        <div class="tenant-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Email:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($tenant_info['email']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Phone:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($tenant_info['phone']); ?></span>
-                            </div>
-                        </div>
-                        
-                        <!-- Applications for this tenant -->
-                        <?php foreach ($applications as $application): ?>
-                            <div class="tenant-property">
+                    <?php foreach ($applications as $application): ?>
+                        <tr>
+                            <!-- Tenant Column -->
+                            <td>
+                                <div class="tenant-info-cell">
+                                    <div class="tenant-avatar-small">
+                                        <?php echo strtoupper(substr($tenant_info['name'], 0, 1)); ?>
+                                    </div>
+                                    <div>
+                                        <strong><?php echo htmlspecialchars($tenant_info['name']); ?></strong>
+                                        <div class="tenant-id">ID: #<?php echo htmlspecialchars($tenant_info['id']); ?></div>
+                                        <?php if ($tenant_info['approved_app_count'] > 1): ?>
+                                            <span class="badge"><?php echo $tenant_info['approved_app_count']; ?> approved</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            <!-- Contact Column -->
+                            <td>
+                                <div><?php echo htmlspecialchars($tenant_info['email']); ?></div>
+                                <div><?php echo htmlspecialchars($tenant_info['phone']); ?></div>
+                            </td>
+                            
+                            <!-- Property Column -->
+                            <td>
                                 <div class="property-title"><?php echo htmlspecialchars($application['property_title']); ?></div>
                                 <div class="property-address">
                                     <i class="fas fa-map-marker-alt"></i>
                                     <?php echo htmlspecialchars($application['property_address']); ?>
                                 </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Application Date:</span>
-                                    <span class="detail-value"><?php echo date('M j, Y', strtotime($application['application_date'])); ?></span>
-                                </div>
-                                
-                                <?php if ($application['lease_id']): ?>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Lease Status:</span>
-                                        <span class="detail-value">
-                                            <span class="lease-status status-<?php echo $application['lease_status']; ?>">
-                                                <?php echo ucfirst($application['lease_status']); ?>
-                                            </span>
-                                        </span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Lease Period:</span>
-                                        <span class="detail-value">
-                                            <?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?> - 
-                                            <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?>
-                                        </span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Rent Amount:</span>
-                                        <span class="detail-value">R<?php echo number_format($application['monthly_rent']); ?>/month</span>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Lease Status:</span>
-                                        <span class="detail-value">No lease created</span>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
+                            </td>
                             
-                            <div class="tenant-actions">
+                            <!-- Application Date Column -->
+                            <td>
+                                <?php echo date('M j, Y', strtotime($application['application_date'])); ?>
+                            </td>
+                            
+                            <!-- Lease Status Column -->
+                            <td>
                                 <?php if ($application['lease_id']): ?>
-                                    <?php if ($application['lease_status'] == 'draft'): ?>
-                                        <button class="btn btn-success sign-lease-btn" data-lease-id="<?php echo $application['lease_id']; ?>">
-                                            <i class="fas fa-signature"></i>
-                                            Sign Lease
-                                        </button>
+                                    <span class="lease-status status-<?php echo $application['lease_status']; ?>">
+                                        <?php echo ucfirst($application['lease_status']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    No lease created
+                                <?php endif; ?>
+                            </td>
+                            
+                            <!-- Lease Period Column -->
+                            <td>
+                                <?php if ($application['lease_id']): ?>
+                                    <?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?> - 
+                                    <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            
+                            <!-- Rent Amount Column -->
+                            <td>
+                                <?php if ($application['lease_id']): ?>
+                                    R<?php echo number_format($application['monthly_rent']); ?>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            
+                            <!-- Actions Column -->
+                            <td>
+                                <div class="table-actions">
+                                    <?php if ($application['lease_id']): ?>
+                                        <?php if ($application['lease_status'] == 'draft'): ?>
+                                            <button class="btn btn-sm btn-success sign-lease-btn" data-lease-id="<?php echo $application['lease_id']; ?>">
+                                                <i class="fas fa-signature"></i> Sign
+                                            </button>
+                                        <?php elseif ($application['lease_status'] == 'active'): ?>
+                                            <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary">
+                                                <i class="fas fa-file-alt"></i> View
+                                            </a>
+                                            <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary">
+                                                <i class="fas fa-download"></i> Download
+                                            </a>
+                                            <button class="btn btn-sm btn-danger terminate-lease-btn" 
+                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
+                                                    data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
+                                                    data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
+                                                <i class="fas fa-times-circle"></i> Terminate
+                                            </button>
+                                        <?php endif; ?>
                                     <?php else: ?>
-                                        <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-secondary view-lease-btn">
-                                            <i class="fas fa-file-alt"></i>
-                                            View Lease
-                                        </a>
-                                        <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-secondary download-lease-btn">
-                                            <i class="fas fa-download"></i>
-                                            Download Lease
-                                        </a>
+                                        <button class="btn btn-sm btn-primary create-lease-btn" 
+                                                data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>" 
+                                                data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
+                                                data-application-id="<?php echo $application['application_id']; ?>"
+                                                data-tenant-id="<?php echo $tenant_info['id']; ?>">
+                                            <i class="fas fa-file-contract"></i> Create
+                                        </button>
                                     <?php endif; ?>
-                                <?php else: ?>
-                                    <button class="btn btn-primary create-lease-btn" 
-                                            data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>" 
-                                            data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
-                                            data-application-id="<?php echo $application['application_id']; ?>"
-                                            data-tenant-id="<?php echo $tenant_info['id']; ?>">
-                                        <i class="fas fa-file-contract"></i>
-                                        Create Lease
-                                    </button>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <!-- Add a separator between applications if there are multiple -->
-                            <?php if ($application !== end($applications)): ?>
-                                <hr style="margin: 1.5rem 0; border: 0; border-top: 1px dashed #e2e8f0;">
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
                 <?php endforeach; ?>
             <?php else: ?>
-                <div class="empty-state" style="grid-column: 1 / -1;">
-                    <i class="fas fa-user-friends"></i>
-                    <h3>No Approved Tenants</h3>
-                    <?php if (isset($error_message)): ?>
-                        <p style="color: red;">Database error occurred. Please check your database connection and table structure.</p>
-                    <?php else: ?>
-                        <p>You don't have any approved tenants yet. Once tenants apply and get approved, they'll appear here.</p>
-                    <?php endif; ?>
-                    <a href="applications.php" class="btn btn-primary">
-                        <i class="fas fa-list"></i>
-                        View Applications
-                    </a>
-                </div>
+                <tr>
+                    <td colspan="8" class="empty-state">
+                        <i class="fas fa-user-friends"></i>
+                        <h3>No Approved Tenants</h3>
+                        <?php if (isset($error_message)): ?>
+                            <p style="color: red;">Database error occurred. Please check your database connection and table structure.</p>
+                        <?php else: ?>
+                            <p>You don't have any approved tenants yet. Once tenants apply and get approved, they'll appear here.</p>
+                        <?php endif; ?>
+                        <a href="applications.php" class="btn btn-primary">
+                            <i class="fas fa-list"></i>
+                            View Applications
+                        </a>
+                    </td>
+                </tr>
             <?php endif; ?>
-        </div>
+        </tbody>
+    </table>
+</div>
     </div>
 
     <!-- Create Lease Modal -->
@@ -1383,7 +1583,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         </div>
     </div>
 
-      <!-- Update the sign lease modal to include the enhanced signature pad -->
+    <!-- Sign Lease Modal -->
     <div class="modal" id="signLeaseModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1400,11 +1600,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                         <p>Please sign your name in the box below using your mouse or finger</p>
                     </div>
                     
-                   <div class="signature-container">
-    <div class="signature-pad-wrapper">
-        <canvas id="signature-pad"></canvas>
-        <div class="signature-center-guide"></div>
-    </div>
+                    <div class="signature-container">
+                        <div class="signature-pad-wrapper">
+                            <canvas id="signature-pad"></canvas>
+                            <div class="signature-center-guide"></div>
+                        </div>
                         <div class="signature-actions">
                             <button type="button" id="clearSignature" class="btn btn-secondary">
                                 <i class="fas fa-undo"></i> Clear Signature
@@ -1429,6 +1629,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         </div>
     </div>
 
+    <!-- Terminate Lease Modal -->
+    <div class="modal" id="terminateLeaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Terminate Lease Agreement</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="terminateLeaseForm" method="POST">
+                    <input type="hidden" name="terminate_lease" value="1">
+                    <input type="hidden" id="terminate_lease_id" name="lease_id" value="">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Tenant</label>
+                        <input type="text" id="terminate_tenant_name" class="form-control" readonly>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Property</label>
+                        <input type="text" id="terminate_property_name" class="form-control" readonly>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Termination Date</label>
+                        <input type="text" name="termination_date" class="form-control datepicker" required>
+                    </div>
+                    
+                    <div class="form-group termination-reason">
+                        <label class="form-label">Termination Reason</label>
+                        <textarea name="termination_reason" class="form-control" rows="4" required placeholder="Enter the reason for terminating this lease..."></textarea>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 2rem;">
+                        <button type="submit" class="btn btn-danger" style="width: 100%;">
+                            <i class="fas fa-times-circle"></i>
+                            Confirm Termination
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Create Template Modal -->
     <!-- Update the template content in the createTemplateModal -->
@@ -1583,6 +1825,28 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             });
     });
 });
+  // Terminate lease buttons
+        document.querySelectorAll('.terminate-lease-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const leaseId = this.getAttribute('data-lease-id');
+                const tenantName = this.getAttribute('data-tenant-name');
+                const propertyName = this.getAttribute('data-property-name');
+                
+                document.getElementById('terminate_lease_id').value = leaseId;
+                document.getElementById('terminate_tenant_name').value = tenantName;
+                document.getElementById('terminate_property_name').value = propertyName;
+                
+                openModal('terminateLeaseModal');
+            });
+        });
+        
+        // Close modals when clicking close button or outside modal
+        closeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const modal = this.closest('.modal');
+                closeModal(modal.id);
+            });
+        });
         
         // Sign lease buttons
         document.querySelectorAll('.sign-lease-btn').forEach(button => {
@@ -1773,8 +2037,131 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             }
         });
 
-        // Your existing JavaScript remains the same
+      
     </script>
     
+<script>
+// Handle lease form submission
+document.getElementById('leaseForm').addEventListener('submit', function(e) {
+    const templateId = this.elements['template_id'].value;
+    if (!templateId) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Error',
+            text: 'Please select a lease template',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+    } else {
+        Swal.fire({
+            title: 'Creating Lease',
+            text: 'Please wait...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    }
+});
+
+// Handle sign lease form submission
+document.getElementById('signLeaseForm').addEventListener('submit', function(e) {
+    if (signaturePad.isEmpty()) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Error',
+            text: 'Please provide a signature before submitting',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+    } else {
+        Swal.fire({
+            title: 'Signing Lease',
+            text: 'Please wait...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    }
+});
+
+// Handle template form submission
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    const templateName = this.elements['template_name'].value.trim();
+    const content = this.elements['content'].value.trim();
+    
+    if (!templateName) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Error',
+            text: 'Please enter a template name',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
+    
+    if (!content) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Error',
+            text: 'Please enter template content',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: 'Creating Template',
+        text: 'Please wait...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+});
+
+// Handle terminate lease form submission
+document.getElementById('terminateLeaseForm').addEventListener('submit', function(e) {
+    Swal.fire({
+        title: 'Terminating Lease',
+        text: 'Please wait...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+});
+</script>
+
+<?php if (isset($success_message)): ?>
+<script>
+Swal.fire({
+    icon: 'success',
+    title: 'Success!',
+    text: '<?php echo addslashes($success_message); ?>',
+    timer: 3000,
+    showConfirmButton: false
+});
+// .then(() => {
+//     // Disabled page reload after success
+//     // window.location.reload();
+// });
+</script>
+<?php endif; ?>
+
+<?php if (isset($error_message)): ?>
+<script>
+Swal.fire({
+    icon: 'error',
+    title: 'Error!',
+    text: '<?php echo addslashes($error_message); ?>'
+});
+</script>
+<?php endif; ?>
+
+
 </body>
 </html>
