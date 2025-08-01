@@ -1,6 +1,5 @@
 <?php
 
-
 session_start();
 
 // Check if user is logged in and is a tenant
@@ -24,7 +23,7 @@ if (!$conn) {
 
 $tenant_id = $_SESSION['user_id'];
 
-// Check what columns exist in tables
+// Check what columns exist in properties table
 $check_properties_query = "SHOW COLUMNS FROM properties";
 $properties_columns_result = mysqli_query($conn, $check_properties_query);
 $properties_columns = [];
@@ -34,8 +33,30 @@ if ($properties_columns_result) {
     }
 }
 
+// Check what columns exist in users table
+$check_users_query = "SHOW COLUMNS FROM users";
+$users_columns_result = mysqli_query($conn, $check_users_query);
+$users_columns = [];
+if ($users_columns_result) {
+    while ($column = mysqli_fetch_assoc($users_columns_result)) {
+        $users_columns[] = $column['Field'];
+    }
+}
+
 $has_status = in_array('status', $properties_columns);
 $has_rent_amount = in_array('rent_amount', $properties_columns);
+
+// Build COALESCE for user name based on available columns
+$name_fields = [];
+if (in_array('full_name', $users_columns)) $name_fields[] = 'u.full_name';
+if (in_array('name', $users_columns)) $name_fields[] = 'u.name';
+if (in_array('first_name', $users_columns)) $name_fields[] = 'u.first_name';
+if (in_array('username', $users_columns)) $name_fields[] = 'u.username';
+if (in_array('email', $users_columns)) $name_fields[] = 'u.email';
+
+$name_coalesce = !empty($name_fields) ? 
+    "COALESCE(" . implode(', ', $name_fields) . ", 'Unknown')" : 
+    "'Unknown'";
 
 // Check if applications table exists
 $check_applications_table = "SHOW TABLES LIKE 'rental_applications'";
@@ -84,7 +105,7 @@ $available_properties_query = "";
 if ($has_status) {
     $available_properties_query = "
         SELECT p.*, 
-               COALESCE(u.full_name, u.name, u.first_name, u.username, 'Unknown') as landlord_name
+               $name_coalesce as landlord_name
         FROM properties p 
         JOIN users u ON p.landlord_id = u.id 
         WHERE p.status = 'approved' 
@@ -94,7 +115,7 @@ if ($has_status) {
 } else {
     $available_properties_query = "
         SELECT p.*, 
-               COALESCE(u.full_name, u.name, u.first_name, u.username, 'Unknown') as landlord_name
+               $name_coalesce as landlord_name
         FROM properties p 
         JOIN users u ON p.landlord_id = u.id 
         ORDER BY p.created_at DESC 
@@ -113,7 +134,7 @@ $recent_applications = null;
 if ($has_applications_table) {
     $recent_applications_query = "
         SELECT ra.*, p.title, p.address, 
-               COALESCE(u.full_name, u.name, u.first_name, u.username, 'Unknown') as landlord_name
+               $name_coalesce as landlord_name
         FROM rental_applications ra
         JOIN properties p ON ra.property_id = p.id
         JOIN users u ON p.landlord_id = u.id

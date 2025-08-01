@@ -42,7 +42,9 @@ $lease_query = "
         landlord.phone AS landlord_phone,
         CONCAT(tenant.first_name, ' ', tenant.last_name) AS tenant_name,
         tenant.email AS tenant_email,
-        tenant.phone AS tenant_phone
+        tenant.phone AS tenant_phone,
+        l.signed_date AS landlord_signed_date,
+        l.tenant_signed_date
     FROM leases l
     JOIN properties p ON l.property_id = p.id
     JOIN lease_templates lt ON l.template_id = lt.id
@@ -308,7 +310,7 @@ $is_landlord = ($_SESSION['user_id'] == $lease['landlord_id']);
                                 <img src="<?php echo htmlspecialchars($lease['signature_path']); ?>" alt="Landlord Signature" style="max-height: 80px;">
                             </div>
                             <div class="signature-date">
-                                Signed on: <?php echo date('M j, Y', strtotime($lease['signed_at'])); ?>
+                                Signed on: <?php echo !empty($lease['landlord_signed_date']) ? date('M j, Y', strtotime($lease['landlord_signed_date'])) : 'Date not available'; ?>
                             </div>
                         <?php else: ?>
                             <div style="height: 80px; border-bottom: 1px solid #94a3b8;"></div>
@@ -323,7 +325,7 @@ $is_landlord = ($_SESSION['user_id'] == $lease['landlord_id']);
                                 <img src="<?php echo htmlspecialchars($lease['tenant_signature_path']); ?>" alt="Tenant Signature" style="max-height: 80px;">
                             </div>
                             <div class="signature-date">
-                                Signed on: <?php echo date('M j, Y', strtotime($lease['tenant_signed_at'])); ?>
+                                Signed on: <?php echo !empty($lease['tenant_signed_date']) ? date('M j, Y', strtotime($lease['tenant_signed_date'])) : 'Date not available'; ?>
                             </div>
                         <?php else: ?>
                             <div style="height: 80px; border-bottom: 1px solid #94a3b8;"></div>
@@ -336,3 +338,6 @@ $is_landlord = ($_SESSION['user_id'] == $lease['landlord_id']);
     </div>
 </body>
 </html>
+<?php
+mysqli_close($conn);
+?>

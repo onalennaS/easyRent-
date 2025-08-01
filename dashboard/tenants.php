@@ -23,7 +23,7 @@ if (!$conn) {
 // Get landlord ID from session
 $landlord_id = (int)$_SESSION['user_id'];
 
-// Fetch approved tenants with lease information
+// Fetch approved tenants with lease information - updated to include all approved applications
 $approved_tenants_query = "
     SELECT 
         u.id AS tenant_id,
@@ -35,6 +35,7 @@ $approved_tenants_query = "
         p.id AS property_id,
         a.id AS application_id,
         a.application_date,
+        a.status AS application_status,
         l.id AS lease_id,
         l.lease_start_date,
         l.lease_end_date,
@@ -42,14 +43,20 @@ $approved_tenants_query = "
         l.security_deposit,
         l.status AS lease_status,
         l.signed_at,
-        l.signature_path
+        l.signature_path,
+        (SELECT COUNT(*) FROM rental_applications a2 
+         WHERE a2.tenant_id = u.id AND a2.status = 'approved') AS approved_app_count
     FROM rental_applications a
     JOIN properties p ON a.property_id = p.id
     JOIN users u ON a.tenant_id = u.id
-    LEFT JOIN leases l ON a.id = l.application_id
+    LEFT JOIN leases l ON a.id = l.application_id AND l.status != 'terminated'
     WHERE p.landlord_id = $landlord_id
     AND a.status = 'approved'
-    ORDER BY a.application_date DESC
+    ORDER BY 
+        u.last_name ASC,
+        u.first_name ASC,
+        a.application_date DESC,
+        CASE WHEN l.status IS NULL THEN 0 ELSE 1 END DESC
 ";
 
 $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
@@ -60,6 +67,25 @@ if ($approved_tenants_result) {
     }
 } else {
     $error_message = "Database error: " . mysqli_error($conn);
+}
+
+// Group applications by tenant
+$grouped_tenants = [];
+foreach ($approved_tenants as $tenant) {
+    $tenant_id = $tenant['tenant_id'];
+    if (!isset($grouped_tenants[$tenant_id])) {
+        $grouped_tenants[$tenant_id] = [
+            'tenant_info' => [
+                'id' => $tenant['tenant_id'],
+                'name' => $tenant['tenant_name'],
+                'email' => $tenant['tenant_email'],
+                'phone' => $tenant['tenant_phone'],
+                'approved_app_count' => $tenant['approved_app_count']
+            ],
+            'applications' => []
+        ];
+    }
+    $grouped_tenants[$tenant_id]['applications'][] = $tenant;
 }
 
 // Fetch lease templates
@@ -88,60 +114,87 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
     $deposit = floatval($_POST['deposit']);
     $terms = mysqli_real_escape_string($conn, $_POST['terms']);
     
-    // Get application details
-    $app_details_query = "SELECT property_id, tenant_id FROM rental_applications WHERE id = $application_id";
-    $app_details_result = mysqli_query($conn, $app_details_query);
+    // Get tenant_id from the application
+    $tenant_id_query = "SELECT tenant_id FROM rental_applications WHERE id = $application_id";
+    $tenant_id_result = mysqli_query($conn, $tenant_id_query);
     
-    if ($app_details_result && mysqli_num_rows($app_details_result) > 0) {
-        $app_details = mysqli_fetch_assoc($app_details_result);
-        $property_id = $app_details['property_id'];
-        $tenant_id = $app_details['tenant_id'];
+    if ($tenant_id_result && mysqli_num_rows($tenant_id_result) > 0) {
+        $tenant_data = mysqli_fetch_assoc($tenant_id_result);
+        $tenant_id = $tenant_data['tenant_id'];
         
-        // Insert lease
-        $insert_query = "
-            INSERT INTO leases (
-                property_id, 
-                tenant_id, 
-                landlord_id,
-                application_id, 
-                template_id, 
-                lease_start_date, 
-                lease_end_date, 
-                monthly_rent, 
-                security_deposit, 
-                terms, 
-                status
-            )
-            VALUES (
-                $property_id, 
-                $tenant_id, 
-                $landlord_id,
-                $application_id, 
-                $template_id, 
-                '$start_date', 
-                '$end_date', 
-                $rent_amount, 
-                $deposit, 
-                '$terms', 
-                'draft'
-            )
-        ";
+        // Check if this tenant already has any draft leases
+        $check_draft_query = "SELECT id FROM leases WHERE tenant_id = $tenant_id AND status = 'draft'";
+        $check_draft_result = mysqli_query($conn, $check_draft_query);
         
-        if (mysqli_query($conn, $insert_query)) {
-            $success_message = "Lease agreement created successfully!";
-            // Refresh tenants data
-            $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
-            $approved_tenants = [];
-            if ($approved_tenants_result) {
-                while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
-                    $approved_tenants[] = $row;
+        if ($check_draft_result && mysqli_num_rows($check_draft_result) > 0) {
+            $error_message = "This tenant already has a draft lease agreement. Please sign or cancel the existing lease before creating a new one.";
+        } else {
+            // Check if this application already has an active lease
+            $check_lease_query = "SELECT id FROM leases WHERE application_id = $application_id AND status != 'terminated'";
+            $check_lease_result = mysqli_query($conn, $check_lease_query);
+            
+            if ($check_lease_result && mysqli_num_rows($check_lease_result) > 0) {
+                $error_message = "This application already has an active lease agreement.";
+            } else {
+                // Get application details
+                $app_details_query = "SELECT property_id, tenant_id FROM rental_applications WHERE id = $application_id";
+                $app_details_result = mysqli_query($conn, $app_details_query);
+                
+                if ($app_details_result && mysqli_num_rows($app_details_result) > 0) {
+                    $app_details = mysqli_fetch_assoc($app_details_result);
+                    $property_id = $app_details['property_id'];
+                    $tenant_id = $app_details['tenant_id'];
+                    
+                    // Insert lease
+                    $insert_query = "
+                        INSERT INTO leases (
+                            property_id, 
+                            tenant_id, 
+                            landlord_id,
+                            application_id, 
+                            template_id, 
+                            lease_start_date, 
+                            lease_end_date, 
+                            monthly_rent, 
+                            security_deposit, 
+                            terms, 
+                            status
+                        )
+                        VALUES (
+                            $property_id, 
+                            $tenant_id, 
+                            $landlord_id,
+                            $application_id, 
+                            $template_id, 
+                            '$start_date', 
+                            '$end_date', 
+                            $rent_amount, 
+                            $deposit, 
+                            '$terms', 
+                            'draft'
+                        )
+                    ";
+                    
+                    if (mysqli_query($conn, $insert_query)) {
+                        $success_message = "Lease agreement created successfully!";
+                        // Refresh tenants data
+                        $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
+                        $approved_tenants = [];
+                        if ($approved_tenants_result) {
+                            while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
+                                $approved_tenants[] = $row;
+                            }
+                        }
+                    } else {
+                        $error_message = "Error creating lease: " . mysqli_error($conn);
+                    }
+                } else {
+                    $error_message = "Error: Could not find application details.";
                 }
             }
-        } else {
-            $error_message = "Error creating lease: " . mysqli_error($conn);
         }
     } else {
-        $error_message = "Error: Could not find application details.";
+        $error_message = "Error: Could not find tenant information.";
     }
 }
 
@@ -1126,102 +1179,116 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
         <!-- Tenant Cards -->
         <div class="tenant-cards">
-            <?php if (!empty($approved_tenants)): ?>
-                <?php foreach ($approved_tenants as $tenant): ?>
+            <?php if (!empty($grouped_tenants)): ?>
+                <?php foreach ($grouped_tenants as $tenant_id => $tenant_data): ?>
+                    <?php 
+                    $tenant_info = $tenant_data['tenant_info'];
+                    $applications = $tenant_data['applications'];
+                    ?>
+                    
                     <div class="tenant-card">
                         <div class="tenant-header">
                             <div class="tenant-avatar">
-                                <?php echo strtoupper(substr($tenant['tenant_name'], 0, 1)); ?>
+                                <?php echo strtoupper(substr($tenant_info['name'], 0, 1)); ?>
                             </div>
                             <div class="tenant-info">
-                                <h3><?php echo htmlspecialchars($tenant['tenant_name']); ?></h3>
-                                <p>Tenant ID: #<?php echo htmlspecialchars($tenant['tenant_id']); ?></p>
+                                <h3><?php echo htmlspecialchars($tenant_info['name']); ?></h3>
+                                <p>Tenant ID: #<?php echo htmlspecialchars($tenant_info['id']); ?></p>
+                                <?php if ($tenant_info['approved_app_count'] > 1): ?>
+                                    <p class="multiple-apps-badge">
+                                        <span class="badge"><?php echo $tenant_info['approved_app_count']; ?> approved applications</span>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                         </div>
                         
                         <div class="tenant-details">
                             <div class="detail-row">
                                 <span class="detail-label">Email:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($tenant['tenant_email']); ?></span>
+                                <span class="detail-value"><?php echo htmlspecialchars($tenant_info['email']); ?></span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Phone:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($tenant['tenant_phone']); ?></span>
+                                <span class="detail-value"><?php echo htmlspecialchars($tenant_info['phone']); ?></span>
                             </div>
-                            
-                            
-                          
-                           
                         </div>
                         
-                        <div class="tenant-property">
-                            <div class="property-title"><?php echo htmlspecialchars($tenant['property_title']); ?></div>
-                            <div class="property-address">
-                                <i class="fas fa-map-marker-alt"></i>
-                                <?php echo htmlspecialchars($tenant['property_address']); ?>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Application Date:</span>
-                                <span class="detail-value"><?php echo date('M j, Y', strtotime($tenant['application_date'])); ?></span>
-                            </div>
-                            
-                            <?php if ($tenant['lease_id']): ?>
+                        <!-- Applications for this tenant -->
+                        <?php foreach ($applications as $application): ?>
+                            <div class="tenant-property">
+                                <div class="property-title"><?php echo htmlspecialchars($application['property_title']); ?></div>
+                                <div class="property-address">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <?php echo htmlspecialchars($application['property_address']); ?>
+                                </div>
                                 <div class="detail-row">
-                                    <span class="detail-label">Lease Status:</span>
-                                    <span class="detail-value">
-                                        <span class="lease-status status-<?php echo $tenant['lease_status']; ?>">
-                                            <?php echo ucfirst($tenant['lease_status']); ?>
+                                    <span class="detail-label">Application Date:</span>
+                                    <span class="detail-value"><?php echo date('M j, Y', strtotime($application['application_date'])); ?></span>
+                                </div>
+                                
+                                <?php if ($application['lease_id']): ?>
+                                    <div class="detail-row">
+                                        <span class="detail-label">Lease Status:</span>
+                                        <span class="detail-value">
+                                            <span class="lease-status status-<?php echo $application['lease_status']; ?>">
+                                                <?php echo ucfirst($application['lease_status']); ?>
+                                            </span>
                                         </span>
-                                    </span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Lease Period:</span>
-                                    <span class="detail-value">
-                                        <?php echo date('M j, Y', strtotime($tenant['lease_start_date'])); ?> - 
-                                        <?php echo date('M j, Y', strtotime($tenant['lease_end_date'])); ?>
-                                    </span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Rent Amount:</span>
-                                    <span class="detail-value">R<?php echo number_format($tenant['monthly_rent']); ?>/month</span>
-                                </div>
-                            <?php else: ?>
-                                <div class="detail-row">
-                                    <span class="detail-label">Lease Status:</span>
-                                    <span class="detail-value">No lease created</span>
-                                </div>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="detail-label">Lease Period:</span>
+                                        <span class="detail-value">
+                                            <?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?> - 
+                                            <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?>
+                                        </span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="detail-label">Rent Amount:</span>
+                                        <span class="detail-value">R<?php echo number_format($application['monthly_rent']); ?>/month</span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="detail-row">
+                                        <span class="detail-label">Lease Status:</span>
+                                        <span class="detail-value">No lease created</span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="tenant-actions">
+                                <?php if ($application['lease_id']): ?>
+                                    <?php if ($application['lease_status'] == 'draft'): ?>
+                                        <button class="btn btn-success sign-lease-btn" data-lease-id="<?php echo $application['lease_id']; ?>">
+                                            <i class="fas fa-signature"></i>
+                                            Sign Lease
+                                        </button>
+                                    <?php else: ?>
+                                        <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-secondary view-lease-btn">
+                                            <i class="fas fa-file-alt"></i>
+                                            View Lease
+                                        </a>
+                                        <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-secondary download-lease-btn">
+                                            <i class="fas fa-download"></i>
+                                            Download Lease
+                                        </a>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <button class="btn btn-primary create-lease-btn" 
+                                            data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>" 
+                                            data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
+                                            data-application-id="<?php echo $application['application_id']; ?>"
+                                            data-tenant-id="<?php echo $tenant_info['id']; ?>">
+                                        <i class="fas fa-file-contract"></i>
+                                        Create Lease
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <!-- Add a separator between applications if there are multiple -->
+                            <?php if ($application !== end($applications)): ?>
+                                <hr style="margin: 1.5rem 0; border: 0; border-top: 1px dashed #e2e8f0;">
                             <?php endif; ?>
-                        </div>
-                        
-                        <div class="tenant-actions">
-        <?php if ($tenant['lease_id']): ?>
-    <?php if ($tenant['lease_status'] == 'draft'): ?>
-        <button class="btn btn-success sign-lease-btn" data-lease-id="<?php echo $tenant['lease_id']; ?>">
-            <i class="fas fa-signature"></i>
-            Sign Lease
-        </button>
-    <?php else: ?>
-        <a href="view_lease.php?id=<?php echo $tenant['lease_id']; ?>" class="btn btn-secondary view-lease-btn">
-            <i class="fas fa-file-alt"></i>
-            View Lease
-        </a>
-        <a href="download_lease.php?id=<?php echo $tenant['lease_id']; ?>" class="btn btn-secondary download-lease-btn">
-            <i class="fas fa-download"></i>
-            Download Lease
-        </a>
-    <?php endif; ?>
-
-
-        <?php else: ?>
-            <button class="btn btn-primary create-lease-btn" 
-                    data-tenant-name="<?php echo htmlspecialchars($tenant['tenant_name']); ?>" 
-                    data-property-name="<?php echo htmlspecialchars($tenant['property_title']); ?>"
-                    data-application-id="<?php echo $tenant['application_id']; ?>">
-                <i class="fas fa-file-contract"></i>
-                Create Lease
-            </button>
-        <?php endif; ?>
-    </div>
+                        <?php endforeach; ?>
+                    </div>
                 <?php endforeach; ?>
             <?php else: ?>
                 <div class="empty-state" style="grid-column: 1 / -1;">
@@ -1478,19 +1545,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         }
         
         // Create lease buttons
-        document.querySelectorAll('.create-lease-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const tenantName = this.getAttribute('data-tenant-name');
-                const propertyName = this.getAttribute('data-property-name');
-                const applicationId = this.getAttribute('data-application-id');
-                
+       // Create lease buttons
+document.querySelectorAll('.create-lease-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const tenantName = this.getAttribute('data-tenant-name');
+        const propertyName = this.getAttribute('data-property-name');
+        const applicationId = this.getAttribute('data-application-id');
+        const tenantId = this.getAttribute('data-tenant-id');
+        
+        // Check if tenant already has a draft lease via AJAX
+        fetch('check_draft_lease.php?tenant_id=' + tenantId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_draft) {
+                    Swal.fire({
+                        title: 'Draft Exists',
+                        text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
+                        icon: 'warning',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    document.getElementById('tenantName').value = tenantName;
+                    document.getElementById('propertyName').value = propertyName;
+                    document.getElementById('application_id').value = applicationId;
+                    
+                    openModal('createLeaseModal');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // If there's an error with the check, still allow opening the modal
                 document.getElementById('tenantName').value = tenantName;
                 document.getElementById('propertyName').value = propertyName;
                 document.getElementById('application_id').value = applicationId;
                 
                 openModal('createLeaseModal');
             });
-        });
+    });
+});
         
         // Sign lease buttons
         document.querySelectorAll('.sign-lease-btn').forEach(button => {

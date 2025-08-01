@@ -30,6 +30,38 @@ if ($properties_columns_result) {
 $has_status = in_array('status', $properties_columns);
 $has_rent_amount = in_array('rent_amount', $properties_columns);
 
+// Check what columns exist in users table
+$check_users_query = "SHOW COLUMNS FROM users";
+$users_columns_result = mysqli_query($conn, $check_users_query);
+$users_columns = [];
+if ($users_columns_result) {
+    while ($column = mysqli_fetch_assoc($users_columns_result)) {
+        $users_columns[] = $column['Field'];
+    }
+}
+
+// Build COALESCE for user name based on available columns
+$name_fields = [];
+if (in_array('full_name', $users_columns)) $name_fields[] = 'u.full_name';
+if (in_array('name', $users_columns)) $name_fields[] = 'u.name';
+if (in_array('first_name', $users_columns)) $name_fields[] = 'u.first_name';
+if (in_array('username', $users_columns)) $name_fields[] = 'u.username';
+if (in_array('email', $users_columns)) $name_fields[] = 'u.email';
+
+$name_coalesce = !empty($name_fields) ? 
+    "COALESCE(" . implode(', ', $name_fields) . ", 'Unknown')" : 
+    "'Unknown'";
+
+// Check if maintenance_requests table exists
+$check_maintenance_table = "SHOW TABLES LIKE 'maintenance_requests'";
+$maintenance_table_result = mysqli_query($conn, $check_maintenance_table);
+$has_maintenance_table = mysqli_num_rows($maintenance_table_result) > 0;
+
+// Check if inquiries table exists
+$check_inquiries_table = "SHOW TABLES LIKE 'inquiries'";
+$inquiries_table_result = mysqli_query($conn, $check_inquiries_table);
+$has_inquiries_table = mysqli_num_rows($inquiries_table_result) > 0;
+
 // Get landlord statistics
 $stats_query = "
     SELECT 
@@ -37,7 +69,7 @@ $stats_query = "
         " . ($has_status ? "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id AND status = 'approved')" : "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id)") . " as active_properties,
         " . ($has_status ? "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id AND status = 'pending')" : "0") . " as pending_properties,
         " . ($has_rent_amount ? "(SELECT COALESCE(SUM(rent_amount), 0) FROM properties WHERE landlord_id = $landlord_id" . ($has_status ? " AND status = 'approved'" : "") . ")" : "0") . " as monthly_income,
-        (SELECT COUNT(*) FROM maintenance_requests mr JOIN properties p ON mr.property_id = p.id WHERE p.landlord_id = $landlord_id AND mr.status = 'open') as open_maintenance
+        " . ($has_maintenance_table ? "(SELECT COUNT(*) FROM maintenance_requests mr JOIN properties p ON mr.property_id = p.id WHERE p.landlord_id = $landlord_id AND mr.status = 'open')" : "0") . " as open_maintenance
 ";
 
 $stats_result = mysqli_query($conn, $stats_query);
@@ -63,27 +95,33 @@ $properties_query = "
 $properties_result = mysqli_query($conn, $properties_query);
 
 // Get recent maintenance requests
-$maintenance_query = "
-    SELECT mr.*, p.title as property_title, p.address as property_address
-    FROM maintenance_requests mr 
-    JOIN properties p ON mr.property_id = p.id 
-    WHERE p.landlord_id = $landlord_id 
-    ORDER BY mr.created_at DESC 
-    LIMIT 5
-";
-$maintenance_result = mysqli_query($conn, $maintenance_query);
+$maintenance_result = null;
+if ($has_maintenance_table) {
+    $maintenance_query = "
+        SELECT mr.*, p.title as property_title, p.address as property_address
+        FROM maintenance_requests mr 
+        JOIN properties p ON mr.property_id = p.id 
+        WHERE p.landlord_id = $landlord_id 
+        ORDER BY mr.created_at DESC 
+        LIMIT 5
+    ";
+    $maintenance_result = mysqli_query($conn, $maintenance_query);
+}
 
-// Get recent inquiries (assuming there's an inquiries table)
-$inquiries_query = "
-    SELECT i.*, p.title as property_title, u.first_name, u.last_name, u.email
-    FROM inquiries i 
-    JOIN properties p ON i.property_id = p.id 
-    JOIN users u ON i.tenant_id = u.id
-    WHERE p.landlord_id = $landlord_id 
-    ORDER BY i.created_at DESC 
-    LIMIT 5
-";
-$inquiries_result = mysqli_query($conn, $inquiries_query);
+// Get recent inquiries (only if table exists)
+$inquiries_result = null;
+if ($has_inquiries_table) {
+    $inquiries_query = "
+        SELECT i.*, p.title as property_title, $name_coalesce as full_name, u.email
+        FROM inquiries i 
+        JOIN properties p ON i.property_id = p.id 
+        JOIN users u ON i.tenant_id = u.id
+        WHERE p.landlord_id = $landlord_id 
+        ORDER BY i.created_at DESC 
+        LIMIT 5
+    ";
+    $inquiries_result = mysqli_query($conn, $inquiries_query);
+}
 ?>
 
 <!DOCTYPE html>

@@ -689,7 +689,7 @@ try {
                 <div class="stat-card income">
                     <div class="stat-header">
                         <div>
-                            <div class="stat-value">$<?php echo number_format($monthlyRevenue); ?></div>
+                            <div class="stat-value">R<?php echo number_format($monthlyRevenue); ?></div>
                             <div class="stat-label">Monthly Revenue</div>
                         </div>
                         <div class="stat-icon">
