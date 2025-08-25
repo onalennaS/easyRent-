@@ -9,7 +9,7 @@
   <style>
     body {
       background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(30, 58, 138, 0.9)),
-        url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2073&q=80');
+        url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
@@ -57,9 +57,6 @@
   <div class="relative z-10 w-full max-w-md">
     <div class="glass-card rounded-3xl p-8 shadow-2xl">
       <div class="flex items-center mb-6 space-x-4">
-        <div class="logo-container flex-shrink-0">
-          <img src="../assets/images/logo.png" alt="EasyRent Logo" class="w-20 h-20 object-contain" />
-        </div>
         <div>
           <h1 class="text-4xl font-bold text-white mb-2 tracking-wide">EasyRent</h1>
           <p class="text-blue-100 text-lg">Find your perfect home</p>
@@ -105,7 +102,7 @@
             <input type="checkbox" name="remember_me" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
             <span class="ml-3 text-sm text-blue-100">Remember me</span>
           </label>
-          <a href="#" class="text-sm text-blue-300 hover:text-blue-100 transition-colors font-medium">Forgot password?</a>
+          <a href="forgot_password.php" class="text-sm text-blue-300 hover:text-blue-100 transition-colors font-medium">Forgot password?</a>
         </div>
 
         <button type="submit" id="submitBtn" class="btn-primary w-full text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg">
@@ -134,7 +131,7 @@
     </div>
 
     <div class="text-center mt-8">
-      <p class="text-blue-100 text-sm">© 2024 EasyRent. Making property rental simple and secure.</p>
+      <p class="text-blue-100 text-sm">© 2025 EasyRent. Making property rental simple and secure.</p>
     </div>
   </div>
 

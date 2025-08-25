@@ -95,13 +95,13 @@ if ($isLoggedIn) {
     <style>
         body {
             background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(30, 58, 138, 0.9)),
-                url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2073&q=80');
+                url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
             min-height: 100vh;
         }
-
+        
         .glass-card {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -121,10 +121,12 @@ if ($isLoggedIn) {
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
 
+        /* FIXED NAVBAR STYLING */
         .navbar {
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
         }
 
         .footer {
@@ -227,6 +229,7 @@ if ($isLoggedIn) {
             margin: 2rem 0;
         }
 
+        /* FIXED USER DROPDOWN */
         .user-dropdown {
             position: relative;
             display: inline-block;
@@ -236,12 +239,11 @@ if ($isLoggedIn) {
             display: none;
             position: absolute;
             right: 0;
-            background: rgba(0, 0, 0, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.1);
             border-radius: 0.5rem;
             min-width: 200px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
             z-index: 1000;
             margin-top: 0.5rem;
         }
@@ -251,15 +253,34 @@ if ($isLoggedIn) {
         }
 
         .dropdown-content a {
-            color: white;
+            color: #333;
             padding: 12px 16px;
             text-decoration: none;
             display: block;
             transition: background-color 0.3s;
+            font-weight: 500;
         }
 
         .dropdown-content a:hover {
-            background-color: rgba(59, 130, 246, 0.2);
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #1e40af;
+        }
+
+        .dropdown-content a i {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+            color: #6b7280;
+        }
+
+        .dropdown-content a:hover i {
+            color: #1e40af;
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 0.5rem 0;
         }
 
         .welcome-section {
@@ -271,213 +292,473 @@ if ($isLoggedIn) {
             backdrop-filter: blur(10px);
         }
         
+        /* FIXED MOBILE NAVIGATION */
+        .mobile-nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-nav-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mobile-nav-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 100;
+            background: white;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            transform: translateY(-100%);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .mobile-nav-container.open {
+            transform: translateY(0);
+        }
+
+        .mobile-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mobile-nav-content {
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+            background: white;
+        }
+
+        .mobile-nav-item {
+            display: block;
+            padding: 1rem 1.5rem;
+            color: #374151;
+            font-weight: 500;
+            border-bottom: 1px solid #f3f4f6;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .mobile-nav-item:hover {
+            background-color: #f9fafb;
+            color: #3b82f6;
+        }
+
+        .mobile-nav-user-section {
+            background: #f9fafb;
+            padding: 1rem 1.5rem;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .mobile-nav-username {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+
+        /* MOBILE HAMBURGER BUTTON - FIXED */
+        .mobile-menu-btn {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 24px;
+            height: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .mobile-menu-btn span {
+            display: block;
+            height: 3px;
+            width: 100%;
+            background: #374151;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-btn.active span:nth-child(1) {
+            transform: rotate(45deg) translate(6px, 6px);
+        }
+
+        .mobile-menu-btn.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-btn.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(6px, -6px);
+        }
+
         /* SweetAlert2 Styling */
         .swal2-popup {
-          border-radius: 1rem !important;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
-          padding: 2rem !important;
-          background: #ffffff !important;
+            border-radius: 0.75rem !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+            padding: 1.5rem !important;
+            background: #ffffff !important;
+            max-width: 400px !important;
         }
 
         .swal2-title {
-          font-size: 1.5rem !important; 
-          font-weight: 700 !important;
-          color: #1e40af !important; 
-          margin-bottom: 1.5rem !important;
+            font-size: 1.25rem !important; 
+            font-weight: 600 !important;
+            color: #1e293b !important; 
+            margin-bottom: 1rem !important;
         }
 
         .swal2-html-container {
-          font-size: 1.1rem !important;
-          color: #374151 !important;
-          line-height: 1.6 !important;
-          margin-bottom: 1.5rem !important;
+            font-size: 1rem !important;
+            color: #4b5563 !important;
+            line-height: 1.5 !important;
+            margin-bottom: 1.5rem !important;
         }
 
         .swal2-html-container a {
-          display: inline-block;
-          margin-top: 1rem;
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #1e40af, #3b82f6);
-          color: white !important;
-          border-radius: 0.5rem;
-          text-decoration: none;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.6rem 1.25rem;
+            background: #3b82f6;
+            color: white !important;
+            border-radius: 0.375rem;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
 
         .swal2-html-container a:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 8px rgba(59, 130, 246, 0.4);
-          text-decoration: none;
+            background: #2563eb;
+            text-decoration: none;
         }
 
         .swal2-confirm {
-          background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
-          border: none !important;
-          color: #fff !important;
-          padding: 0.75rem 2rem !important;
-          font-size: 1rem !important;
-          border-radius: 0.5rem !important;
-          box-shadow: none !important;
-          transition: all 0.3s ease !important;
+            background: #3b82f6 !important;
+            border: none !important;
+            color: #fff !important;
+            padding: 0.6rem 1.5rem !important;
+            font-size: 0.9rem !important;
+            border-radius: 0.375rem !important;
+            box-shadow: none !important;
+            transition: all 0.2s ease !important;
+            font-weight: 500 !important;
         }
 
         .swal2-confirm:hover {
-          transform: translateY(-2px) !important;
-          opacity: 0.95 !important;
+            background: #2563eb !important;
+            transform: none !important;
         }
+
+        /* Enhanced no properties display */
+        .no-properties-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 3rem 2rem;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 2rem auto;
+        }
+        
+        .no-properties-icon {
+            font-size: 4rem;
+            color: #3b82f6;
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Colored SweetAlerts */
+        .swal2-info {
+            border-left: 4px solid #3b82f6 !important;
+        }
+        
+        .swal2-success {
+            border-left: 4px solid #10b981 !important;
+        }
+        
+        .swal2-warning {
+            border-left: 4px solid #f59e0b !important;
+        }
+        
+        .swal2-error {
+            border-left: 4px solid #ef4444 !important;
+        }
+
+        /* RESPONSIVE BREAKPOINTS - FIXED */
+        @media (min-width: 769px) {
+            .mobile-only {
+                display: none !important;
+            }
+            
+            .mobile-nav-container {
+                display: none !important;
+            }
+            
+            .mobile-menu-btn {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none !important;
+            }
+            
+            .mobile-menu-btn {
+                display: flex !important;
+            }
+            
+            .properties-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .mobile-nav-item {
+                padding: 0.8rem 1.2rem;
+                font-size: 0.95rem;
+            }
+            
+            .mobile-nav-user-section {
+                padding: 0.8rem 1.2rem;
+            }
+            
+            /* Hide desktop navigation on mobile */
+            .navbar .hidden.md\\:flex {
+                display: none !important;
+            }
+        }
+        @media (max-width: 768px) {
+    .desktop-only {
+        display: none !important;
+    }
+    
+    .mobile-menu-btn {
+        display: flex !important;
+    }
+    
+    /* Show the mobile menu button */
+    .md\\:hidden {
+        display: flex !important;
+    }
+    
+    /* Hide desktop user section on mobile */
+    .hidden.md\\:flex {
+        display: none !important;
+    }
+}
+/* Left-aligned mobile menu */
+.mobile-nav-container {
+    width: 300px; /* Fixed width for the menu */
+    max-width: 80%; /* But never more than 80% of screen */
+    height: 100vh; /* Full height */
+    transform: translateX(-100%); /* Start off-screen to the left */
+    border-radius: 0; /* Remove rounded corners */
+    left: 0; /* Align to left */
+    right: auto; /* Override any right positioning */
+}
+
+.mobile-nav-container.open {
+    transform: translateX(0); /* Slide in from left */
+}
+
+/* Adjust overlay to work with left menu */
+.mobile-nav-overlay.show {
+    backdrop-filter: blur(5px);
+}
+
+/* Ensure content is properly sized */
+.mobile-nav-content {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* Adjust header for left menu */
+.mobile-nav-header {
+    padding: 1rem;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Adjust menu items */
+.mobile-nav-item {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* User section at bottom */
+.mobile-nav-user-section {
+    padding: 1rem;
+    background: #f9fafb;
+    margin-top: auto;
+    border-top: 1px solid #e5e7eb;
+}
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar fixed w-full top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-4">
-                    <img src="https://cdn-icons-png.flaticon.com/512/489/489870.png" alt="EasyRent Logo" class="w-10 h-10 object-contain" />
-                    <div>
-                        <h1 class="text-2xl font-bold text-white">EasyRent</h1>
-                        <p class="text-xs text-blue-200">Property Management</p>
-                    </div>
+    <!-- Mobile Navigation Overlay -->
+    <div id="mobileNavOverlay" class="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+
+    <!-- Mobile Navigation -->
+    <div id="mobileNavContainer" class="mobile-nav-container">
+        <div class="mobile-nav-header">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">EasyRent</h1>
+                <p class="text-xs text-blue-600">Property Management</p>
+            </div>
+            <button onclick="closeMobileNav()" class="text-gray-700 hover:text-red-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        
+        <div class="mobile-nav-content">
+            <!-- Main Navigation Links -->
+            <a href="#home" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-home mr-3"></i>Home
+            </a>
+            <a href="#properties" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-building mr-3"></i>Properties
+            </a>
+            <a href="#about" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-info-circle mr-3"></i>About
+            </a>
+            <a href="#contact" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-envelope mr-3"></i>Contact
+            </a>
+            
+            <!-- User Section for Logged In Users -->
+            <?php if($isLoggedIn): ?>
+            <div class="mobile-nav-user-section">
+                <div class="mobile-nav-username">
+                    <i class="fas fa-user-circle mr-2"></i>
+                    <?php echo htmlspecialchars($username); ?>
                 </div>
                 
-                <div class="hidden md:flex items-center space-x-8">
-                    <a href="#home" class="text-white hover:text-blue-300 transition-colors">Home</a>
-                    <a href="#properties" class="text-white hover:text-blue-300 transition-colors">Properties</a>
-                    <a href="#about" class="text-white hover:text-blue-300 transition-colors">About</a>
-                    <a href="#contact" class="text-white hover:text-blue-300 transition-colors">Contact</a>
-                    <a href="profile.php" class="text-white hover:text-blue-300 transition-colors">Profile</a>
-                    
-                    <!-- Show Tenant Dashboard link when logged in as tenant -->
-                    <?php if($isLoggedIn && $userRole === 'tenant'): ?>
-                    <div id="tenantDashboardLink">
-                        <a href="dashboard/tenant_dashboard.php" class="text-blue-300 hover:text-blue-100 transition-colors font-semibold">
-                            <i class="fas fa-tachometer-alt mr-2"></i>Tenant Dashboard
-                        </a>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <!-- Show Landlord Dashboard link when logged in as landlord -->
-                    <?php if($isLoggedIn && $userRole === 'landlord'): ?>
-                    <div id="landlordDashboardLink">
-                        <a href="dashboard/landlord_dashboard.php" class="text-blue-300 hover:text-blue-100 transition-colors font-semibold">
-                            <i class="fas fa-tachometer-alt mr-2"></i>Landlord Dashboard
-                        </a>
-                    </div>
-                    <?php endif; ?>
-                </div>
+                <!-- Dashboard Link -->
+                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="mobile-nav-item" onclick="closeMobileNav()">
+                    <i class="fas fa-tachometer-alt mr-3"></i>
+                    <?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
+                </a>
+                
+                <a href="profile.php" class="mobile-nav-item" onclick="closeMobileNav()">
+                    <i class="fas fa-user mr-3"></i>Profile
+                </a>
+                
+                <a href="settings.php" class="mobile-nav-item" onclick="closeMobileNav()">
+                    <i class="fas fa-cog mr-3"></i>Settings
+                </a>
+                
+                <a href="#" onclick="confirmLogout(); return false;" class="mobile-nav-item text-red-600 hover:bg-red-50">
+                    <i class="fas fa-sign-out-alt mr-3"></i>Logout
+                </a>
+            </div>
+            <?php else: ?>
+            <!-- Guest User Section -->
+            <div class="mobile-nav-user-section">
+                <a href="auth/login.php" class="block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold mb-3 hover:bg-blue-700 transition-colors" onclick="closeMobileNav()">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                </a>
+                <a href="auth/register.php" class="block w-full text-center border-2 border-blue-600 text-blue-600 py-3 px-4 rounded-lg font-semibold hover:bg-blue-50 transition-colors" onclick="closeMobileNav()">
+                    <i class="fas fa-user-plus mr-2"></i>Register
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
 
-                <!-- User Authentication Section -->
-                <div class="flex items-center space-x-4">
-                    <!-- Show when not logged in -->
-                    <?php if(!$isLoggedIn): ?>
-                    <div id="authLinks" class="flex items-center space-x-4">
-                        <a href="auth/login.php" class="text-white hover:text-blue-300 transition-colors">
-                            <i class="fas fa-sign-in-alt mr-2"></i>Login
-                        </a>
-                        <a href="auth/register.php" class="btn-primary px-4 py-2 rounded-lg text-white font-semibold">
-                            <i class="fas fa-user-plus mr-2"></i>Register
-                        </a>
-                    </div>
-                    <?php endif; ?>
-
-                    <!-- Show when logged in -->
-                    <?php if($isLoggedIn): ?>
-                    <div id="userSection" class="user-dropdown">
-                        <button onclick="toggleUserDropdown()" class="flex items-center space-x-2 text-white hover:text-blue-300 transition-colors">
-                            <i class="fas fa-user-circle text-2xl"></i>
-                            <span id="userName"><?php echo htmlspecialchars($username); ?></span>
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                        <div id="userDropdown" class="dropdown-content">
-                            <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" id="dashboardLink">
-                                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-                            </a>
-                            <a href="profile.php">
-                                <i class="fas fa-user mr-2"></i>Profile
-                            </a>
-                            <a href="settings.php">
-                                <i class="fas fa-cog mr-2"></i>Settings
-                            </a>
-                            <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 0.5rem 0;"></div>
-                            <a href="#" onclick="confirmLogout()">
-                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Mobile menu button -->
-                <div class="md:hidden">
-                    <button id="mobileMenuButton" class="text-white hover:text-blue-300">
-                        <i class="fas fa-bars text-xl"></i>
-                    </button>
+    <!-- Desktop Navigation -->
+<nav class="navbar fixed w-full top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+            <!-- Logo -->
+            <div class="flex items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">EasyRent</h1>
+                    <p class="text-xs text-blue-600">Property Management</p>
                 </div>
             </div>
-        </div>
-
-        <!-- Mobile menu -->
-        <div id="mobileMenu" class="hidden md:hidden bg-black bg-opacity-90">
-            <div class="px-2 pt-2 pb-3 space-y-1">
-                <a href="#home" class="block px-3 py-2 text-white hover:text-blue-300">Home</a>
-                <a href="#properties" class="block px-3 py-2 text-white hover:text-blue-300">Properties</a>
-                <a href="#about" class="block px-3 py-2 text-white hover:text-blue-300">About</a>
-                <a href="#contact" class="block px-3 py-2 text-white hover:text-blue-300">Contact</a>
+            
+            <!-- Desktop Navigation Links -->
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#home" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Home</a>
+                <a href="#properties" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Properties</a>
+                <a href="#about" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">About</a>
+                <a href="#contact" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Contact</a>
+                <a href="profile.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Profile</a>
                 
-                <!-- Mobile Tenant Dashboard Link -->
-                <?php if($isLoggedIn && $userRole === 'tenant'): ?>
-                <div id="mobileTenantDashboard">
-                    <a href="dashboard/tenant_dashboard.php" class="block px-3 py-2 text-blue-300 hover:text-blue-100 font-semibold">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Tenant Dashboard
-                    </a>
-                </div>
-                <?php endif; ?>
-                
-                <!-- Mobile Landlord Dashboard Link -->
-                <?php if($isLoggedIn && $userRole === 'landlord'): ?>
-                <div id="mobileLandlordDashboard">
-                    <a href="dashboard/landlord_dashboard.php" class="block px-3 py-2 text-blue-300 hover:text-blue-100 font-semibold">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Landlord Dashboard
-                    </a>
-                </div>
-                <?php endif; ?>
-                
-                <!-- Mobile Auth Links -->
-                <?php if(!$isLoggedIn): ?>
-                <div id="mobileAuthLinks" class="border-t border-gray-600 pt-2 mt-2">
-                    <a href="auth/login.php" class="block px-3 py-2 text-white hover:text-blue-300">Login</a>
-                    <a href="auth/register.php" class="block px-3 py-2 text-white hover:text-blue-300">Register</a>
-                </div>
-                <?php endif; ?>
-                
-                <!-- Mobile User Menu -->
+                <!-- Show Dashboard link when logged in -->
                 <?php if($isLoggedIn): ?>
-                <div id="mobileUserMenu" class="border-t border-gray-600 pt-2 mt-2">
-                    <div class="px-3 py-2 text-blue-300 font-semibold">
-                        <i class="fas fa-user-circle mr-2"></i><span id="mobileUserName"><?php echo htmlspecialchars($username); ?></span>
+                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold">
+                    <i class="fas fa-tachometer-alt mr-2"></i><?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
+                </a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Desktop User Section -->
+            <div class="hidden md:flex items-center space-x-4">
+                <?php if(!$isLoggedIn): ?>
+                <!-- Guest Links -->
+                <div class="flex items-center space-x-4">
+                    <a href="auth/login.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Login
+                    </a>
+                    <a href="auth/register.php" class="btn-primary px-4 py-2 rounded-lg text-white font-semibold">
+                        <i class="fas fa-user-plus mr-2"></i>Register
+                    </a>
+                </div>
+                <?php else: ?>
+                <!-- Logged In User Dropdown -->
+                <div class="user-dropdown">
+                    <button onclick="toggleUserDropdown()" class="flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                        <i class="fas fa-user-circle text-2xl"></i>
+                        <span><?php echo htmlspecialchars($username); ?></span>
+                        <i class="fas fa-chevron-down text-sm"></i>
+                    </button>
+                    <div id="userDropdown" class="dropdown-content">
+                        <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>">
+                            <i class="fas fa-tachometer-alt"></i>Dashboard
+                        </a>
+                        <a href="profile.php">
+                            <i class="fas fa-user"></i>Profile
+                        </a>
+                        <a href="settings.php">
+                            <i class="fas fa-cog"></i>Settings
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#" onclick="confirmLogout(); return false;">
+                            <i class="fas fa-sign-out-alt"></i>Logout
+                        </a>
                     </div>
-                    <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" id="mobileDashboardLink" class="block px-3 py-2 text-white hover:text-blue-300">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-                    </a>
-                    <a href="profile.php" class="block px-3 py-2 text-white hover:text-blue-300">
-                        <i class="fas fa-user mr-2"></i>Profile
-                    </a>
-                    <a href="settings.php" class="block px-3 py-2 text-white hover:text-blue-300">
-                        <i class="fas fa-cog mr-2"></i>Settings
-                    </a>
-                    <a href="#" onclick="confirmLogout()" class="block px-3 py-2 text-white hover:text-blue-300">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </a>
                 </div>
                 <?php endif; ?>
             </div>
+
+            <!-- Mobile Menu Button - Moved outside desktop-only section -->
+            <div class="md:hidden flex items-center">
+                <button onclick="toggleMobileNav()" class="mobile-menu-btn" id="mobileMenuBtn">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
         </div>
-    </nav>
-    
+    </div>
+</nav>
+
     <!-- Properties Section -->
-    <section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800">
+    <section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800 mt-16">
         <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12">
                 <h2 class="text-4xl font-bold text-white mb-3">Available Properties</h2>
@@ -487,21 +768,21 @@ if ($isLoggedIn) {
             <!-- Filter Section -->
             <div class="mb-8">
                 <div class="glass-card rounded-xl p-6">
-                    <h3 class="text-xl font-semibold text-white mb-4">
+                    <h3 class="text-xl font-semibold text-black mb-4">
                         <i class="fas fa-filter mr-2"></i>Filter Properties
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <!-- Location Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-blue-200 mb-2">Location</label>
+                            <label class="block text-sm font-medium text-gray-800 mb-2">Location</label>
                             <input type="text" id="locationFilter" placeholder="Search by location..." 
-                                   class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+                                   class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500">
                         </div>
                         
                         <!-- Bedrooms Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-blue-200 mb-2">Min Bedrooms</label>
-                            <select id="bedroomsFilter" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black">
+                            <label class="block text-sm font-medium text-gray-800 mb-2">Min Bedrooms</label>
+                            <select id="bedroomsFilter" class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900">
                                 <option value="">Any</option>
                                 <option value="1">1+</option>
                                 <option value="2">2+</option>
@@ -512,14 +793,14 @@ if ($isLoggedIn) {
                         
                         <!-- Price Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-blue-200 mb-2">Max Price (R)</label>
+                            <label class="block text-sm font-medium text-gray-800 mb-2">Max Price (R)</label>
                             <input type="number" id="maxPriceFilter" placeholder="Max price..." 
-                                   class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black placeholder-black-200">
+                                   class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500">
                         </div>
                         
                         <!-- Clear Filters -->
                         <div class="flex items-end">
-                            <button onclick="clearFilters()" class="w-full btn-secondary px-4 py-2 rounded-lg text-white font-semibold">
+                            <button onclick="clearFilters()" class="w-full bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-white font-semibold transition-colors">
                                 <i class="fas fa-times mr-2"></i>Clear Filters
                             </button>
                         </div>
@@ -584,7 +865,7 @@ if ($isLoggedIn) {
                 $result = $stmt->get_result();
 
                 if ($result->num_rows > 0) {
-                    echo '<div id="propertiesGrid" class="grid gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">';
+                    echo '<div id="propertiesGrid" class="grid gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 properties-grid">';
                     
                     while ($property = $result->fetch_assoc()) {
                         $property_image = !empty($property['main_image']) ? 'uploads/properties/' . htmlspecialchars($property['main_image']) : '';
@@ -627,12 +908,16 @@ if ($isLoggedIn) {
 
                     echo '</div>';
                 } else {
-                    echo '<div class="text-center py-16">';
-                    echo '<div class="inline-block bg-blue-800 p-6 rounded-full shadow-lg animate-bounce mb-6">';
-                    echo '<i class="fas fa-search text-white text-5xl"></i>';
+                    // Enhanced no properties display
+                    echo '<div class="no-properties-container">';
+                    echo '<div class="no-properties-icon">';
+                    echo '<i class="fas fa-search"></i>';
                     echo '</div>';
-                    echo '<h3 class="text-2xl font-bold text-white mb-2">No Properties Found</h3>';
-                    echo '<p class="text-blue-200 text-sm">Try adjusting your search criteria or clear the filters.</p>';
+                    echo '<h3 class="text-2xl font-bold text-gray-800 mb-3">No Properties Found</h3>';
+                    echo '<p class="text-gray-600 mb-6">We couldn\'t find any properties matching your criteria. Try adjusting your filters or browse our complete collection.</p>';
+                    echo '<button onclick="clearFilters()" class="btn-primary px-6 py-3 rounded-lg text-white font-semibold">';
+                    echo '<i class="fas fa-redo mr-2"></i>Reset Filters';
+                    echo '</button>';
                     echo '</div>';
                 }
 
@@ -648,182 +933,136 @@ if ($isLoggedIn) {
         </div>
     </section>
 
-    <!-- About Section -->
-    <section id="about" class="py-16">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                <div class="animate-slideUp">
-                    <h2 class="text-4xl font-bold text-white mb-6">Why Choose EasyRent?</h2>
-                    <div class="space-y-6">
-                        <div class="flex items-start space-x-4">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-shield-alt text-blue-400 text-2xl"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-white mb-2">Secure & Reliable</h3>
-                                <p class="text-blue-200">Advanced security measures protect your data and transactions</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start space-x-4">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-users text-blue-400 text-2xl"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-white mb-2">Professional Support</h3>
-                                <p class="text-blue-200">24/7 customer support to help you manage your properties</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start space-x-4">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-mobile-alt text-blue-400 text-2xl"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-white mb-2">Mobile Friendly</h3>
-                                <p class="text-blue-200">Access your properties anywhere, anytime from any device</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer id="contact" class="footer py-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div class="col-span-1 md:col-span-2">
-                    <div class="flex items-center space-x-4 mb-6">
-                        <img src="https://cdn-icons-png.flaticon.com/512/489/489870.png" alt="EasyRent Logo" class="w-12 h-12 object-contain" />
-                        <div>
-                            <h3 class="text-2xl font-bold text-white">EasyRent</h3>
-                            <p class="text-blue-200">Professional Property Management</p>
-                        </div>
-                    </div>
-                    <p class="text-blue-200 mb-4">
-                        Making property rental simple, secure, and efficient for landlords and tenants worldwide.
-                    </p>
-                    <div class="flex space-x-4">
-                        <a href="#" class="text-blue-400 hover:text-blue-300 transition-colors">
-                            <i class="fab fa-facebook text-2xl"></i>
-                        </a>
-                        <a href="#" class="text-blue-400 hover:text-blue-300 transition-colors">
-                            <i class="fab fa-twitter text-2xl"></i>
-                        </a>
-                        <a href="#" class="text-blue-400 hover:text-blue-300 transition-colors">
-                            <i class="fab fa-instagram text-2xl"></i>
-                        </a>
-                        <a href="#" class="text-blue-400 hover:text-blue-300 transition-colors">
-                            <i class="fab fa-linkedin text-2xl"></i>
-                        </a>
-                    </div>
-                </div>
-                
-                <div>
-                    <h4 class="text-lg font-semibold text-white mb-4">Quick Links</h4>
-                    <ul class="space-y-2">
-                        <li><a href="#home" class="text-blue-200 hover:text-blue-300 transition-colors">Home</a></li>
-                        <li><a href="#properties" class="text-blue-200 hover:text-blue-300 transition-colors">Properties</a></li>
-                        <li><a href="auth/login.php" class="text-blue-200 hover:text-blue-300 transition-colors">Login</a></li>
-                        <li><a href="auth/register.php" class="text-blue-200 hover:text-blue-300 transition-colors">Register</a></li>
-                    </ul>
-                </div>
-                
-                <div>
-                    <h4 class="text-lg font-semibold text-white mb-4">Contact Info</h4>
-                    <ul class="space-y-2 text-blue-200">
-                        <li class="flex items-center">
-                            <i class="fas fa-envelope mr-3 text-blue-400"></i>
-                            info@easyrent.com
-                        </li>
-                        <li class="flex items-center">
-                            <i class="fas fa-phone mr-3 text-blue-400"></i>
-                            +1 (555) 123-4567
-                        </li>
-                        <li class="flex items-center">
-                            <i class="fas fa-map-marker-alt mr-3 text-blue-400"></i>
-                            123 Business Ave, City
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </footer>
-
     <!-- Add SweetAlert JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <!-- Navigation and Dropdown Functionality -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Toggle user dropdown
-        window.toggleUserDropdown = function() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
+        initializeNavigation();
+        
+        <?php if ($showProfileAlert): ?>
+        // Show profile completion alert with colored styling
+        Swal.fire({
+            title: 'Complete Your Profile',
+            html: `Your profile information is incomplete.<br><br>
+                   Please complete your profile to access all features and ensure the best experience.<br><br>
+                   <a href="settings.php" class="text-blue-500 underline font-medium">Click here to complete your profile</a>`,
+            icon: 'info',
+            confirmButtonText: 'OK',
+            customClass: {
+                popup: 'swal2-info',
+                confirmButton: 'swal2-confirm'
+            },
+            buttonsStyling: false,
+            allowOutsideClick: false
+        });
+        <?php endif; ?>
+    });
+
+    function initializeNavigation() {
+        // Close mobile nav when clicking on navigation links
+        document.querySelectorAll('.mobile-nav-item').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // Only close if it's a navigation link, not a button
+                if (this.getAttribute('href') && this.getAttribute('href') !== '#') {
+                    closeMobileNav();
+                }
+            });
+        });
 
         // Close dropdown when clicking outside
         document.addEventListener('click', function(event) {
             const dropdown = document.getElementById('userDropdown');
-            const userSection = document.getElementById('userSection');
+            const userSection = document.querySelector('.user-dropdown');
             
             if (dropdown && dropdown.classList.contains('show') && 
-                !event.target.closest('#userSection')) {
+                !event.target.closest('.user-dropdown')) {
                 dropdown.classList.remove('show');
             }
         });
 
-        // Mobile menu toggle
-        document.getElementById('mobileMenuButton').addEventListener('click', function() {
-            const mobileMenu = document.getElementById('mobileMenu');
-            mobileMenu.classList.toggle('hidden');
+        // Handle escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeMobileNav();
+                const dropdown = document.getElementById('userDropdown');
+                if (dropdown) dropdown.classList.remove('show');
+            }
         });
 
-        // Confirm logout
-        window.confirmLogout = function() {
-            Swal.fire({
-                title: 'Logout?',
-                text: 'Are you sure you want to logout?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Yes, logout',
-                cancelButtonText: 'Cancel',
-                customClass: {
-                    confirmButton: 'btn-primary',
-                    cancelButton: 'btn-secondary'
-                },
-                buttonsStyling: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = 'auth/logout.php';
-                }
-            });
-        }
-        
- <?php if ($showProfileAlert): ?>
-// Show profile completion alert
-Swal.fire({
-    title: 'Complete Your Profile',
-    html: `Your profile information is incomplete.<br><br>
-           Please complete your profile to access all features and ensure the best experience.<br><br>
-           <a href="settings.php" class="text-blue-500 underline font-medium">Click here to complete your profile</a>`,
-    icon: 'info',
-    confirmButtonText: 'OK',
-    customClass: {
-        confirmButton: 'btn-primary',
-        popup: 'swal2-rounded'
-    },
-    buttonsStyling: false,
-    allowOutsideClick: false
-});
-<?php endif; ?>
-    });
-    </script>
+        // Initialize filter functionality
+        setupFilterEventListeners();
+        loadFiltersFromURL();
+    }
 
-    <!-- Property Management Script -->
-    <script>
-    // Setup filter event listeners
+    // Mobile Navigation Functions
+    function toggleMobileNav() {
+        const container = document.getElementById('mobileNavContainer');
+        const isOpen = container.classList.contains('open');
+        
+        if (isOpen) {
+            closeMobileNav();
+        } else {
+            openMobileNav();
+        }
+    }
+
+    function openMobileNav() {
+        const container = document.getElementById('mobileNavContainer');
+        const overlay = document.getElementById('mobileNavOverlay');
+        const menuBtn = document.getElementById('mobileMenuBtn');
+        
+        container.classList.add('open');
+        overlay.classList.add('show');
+        menuBtn.classList.add('active');
+        
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeMobileNav() {
+        const container = document.getElementById('mobileNavContainer');
+        const overlay = document.getElementById('mobileNavOverlay');
+        const menuBtn = document.getElementById('mobileMenuBtn');
+        
+        container.classList.remove('open');
+        overlay.classList.remove('show');
+        menuBtn.classList.remove('active');
+        
+        // Restore body scrolling
+        document.body.style.overflow = '';
+    }
+
+    // Desktop Dropdown Functions
+    function toggleUserDropdown() {
+        const dropdown = document.getElementById('userDropdown');
+        dropdown.classList.toggle('show');
+    }
+
+    // Logout Confirmation
+    function confirmLogout() {
+        Swal.fire({
+            title: 'Logout?',
+            text: 'Are you sure you want to logout?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, logout',
+            cancelButtonText: 'Cancel',
+            customClass: {
+                popup: 'swal2-info',
+                confirmButton: 'swal2-confirm',
+                cancelButton: 'btn-secondary'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = 'auth/logout.php';
+            }
+        });
+    }
+
+    // Property Filter Functions
     function setupFilterEventListeners() {
         document.getElementById('locationFilter').addEventListener('input', debounce(applyFilters, 500));
         document.getElementById('bedroomsFilter').addEventListener('change', applyFilters);
@@ -895,12 +1134,6 @@ Swal.fire({
         if (bedrooms) document.getElementById('bedroomsFilter').value = bedrooms;
         if (maxPrice) document.getElementById('maxPriceFilter').value = maxPrice;
     }
-    
-    // Initialize filters
-    document.addEventListener('DOMContentLoaded', function() {
-        setupFilterEventListeners();
-        loadFiltersFromURL();
-    });
     </script>
 </body>
 </html>

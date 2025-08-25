@@ -76,31 +76,28 @@ if ($terminated_result) {
             background: #f8fafc;
             color: #1e293b;
             line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
         }
 
-        /* Top Navigation */
-        .top-nav {
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
             background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
             color: white;
-            padding: 0 2rem;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 1000;
         }
 
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
+        .sidebar-header {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .logo {
+        .sidebar-logo {
             font-size: 1.5rem;
             font-weight: bold;
             display: flex;
@@ -108,35 +105,15 @@ if ($terminated_result) {
             gap: 0.5rem;
         }
 
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-menu a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-menu a:hover,
-        .nav-menu a.active {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        }
-
-        .user-profile {
+        .sidebar-user {
+            padding: 1.5rem 1rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .profile-avatar {
+        .user-avatar {
             width: 40px;
             height: 40px;
             background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
@@ -148,32 +125,90 @@ if ($terminated_result) {
             font-size: 1.1rem;
         }
 
-        /* Main Content */
-        .main-content {
-            margin-top: 70px;
-            padding: 2rem;
-            max-width: 1400px;
-            margin-left: auto;
-            margin-right: auto;
+        .user-info {
+            flex: 1;
         }
 
-        /* Page Header */
-        .page-header {
+        .user-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .user-role {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            list-style: none;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .logout-link {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 250px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        /* Top Bar */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 2rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e5e7eb;
         }
 
         .page-title {
-            font-size: 1.8rem;
+            font-size: 1.75rem;
             font-weight: 700;
             color: #1e293b;
             display: flex;
             align-items: center;
             gap: 0.75rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
         }
 
         .btn {
@@ -334,44 +369,144 @@ if ($terminated_result) {
             display: flex;
             gap: 1rem;
         }
+
+        /* Responsive Design */
+        @media (max-width: 900px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .mobile-menu-btn {
+                display: block;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .terminated-lease-card {
+                padding: 1rem;
+            }
+
+            .tenant-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .tenant-avatar {
+                margin-right: 0;
+            }
+
+            .detail-row {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            .detail-value {
+                text-align: left;
+                font-weight: 600;
+            }
+        }
     </style>
 </head>
 <body>
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <div class="logo">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
                 <i class="fas fa-home"></i>
                 Easy Rent
             </div>
-            
-            <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php">Dashboard</a></li>
-                <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php">Applications</a></li>
-                <li><a href="add_property.php">Add Property</a></li>
-                <li><a href="maintenance.php">Maintenance</a></li>
-                <li><a href="tenants.php">Tenants</a></li>
-                
-                <li><a href="reports.php">Reports</a></li>
-            </ul>
-            
-            <div class="user-profile">
-                <span>Welcome, <?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></span>
-                <div class="profile-avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
-                </div>
-                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
-                    <i class="fas fa-sign-out-alt"></i>
-                </a>
+        </div>
+        
+        <div class="sidebar-user">
+            <div class="user-avatar">
+                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
+            </div>
+            <div class="user-info">
+                <div class="user-name"><?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></div>
+                <div class="user-role">Landlord</div>
             </div>
         </div>
-    </nav>
+        
+        <ul class="sidebar-nav">
+            <li class="nav-item">
+                <a href="landlord_dashboard.php" class="nav-link">
+                    <i class="fas fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="my_properties.php" class="nav-link">
+                    <i class="fas fa-building"></i>
+                    <span>My Properties</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="applications.php" class="nav-link">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Applications</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="add_property.php" class="nav-link">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Add Property</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="maintenance.php" class="nav-link">
+                    <i class="fas fa-tools"></i>
+                    <span>Maintenance</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="tenants.php" class="nav-link active">
+                    <i class="fas fa-users"></i>
+                    <span>Tenants</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="reports.php" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Reports</span>
+                </a>
+            </li>
+            <li class="nav-item logout-link">
+                <a href="../auth/logout.php" class="nav-link" id="logoutLink">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </aside>
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Page Header -->
-        <div class="page-header">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <button class="mobile-menu-btn">
+                <i class="fas fa-bars"></i>
+            </button>
             <h1 class="page-title">
                 <i class="fas fa-file-contract"></i>
                 Terminated Leases
@@ -454,6 +589,44 @@ if ($terminated_result) {
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Mobile menu toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+        });
+
+        // Logout confirmation
+        document.getElementById('logoutLink').addEventListener('click', function(e) {
+            e.preventDefault();
+
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'You will be logged out from your account.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, log out',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth < 900 && 
+                sidebar.classList.contains('active') && 
+                !sidebar.contains(e.target) && 
+                !mobileMenuBtn.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
         // Show success/error messages
         <?php if (isset($success_message)): ?>
             Swal.fire({

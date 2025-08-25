@@ -661,6 +661,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
+    
 
     <!-- Main Content -->
     <div class="main-content">
@@ -966,6 +967,8 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             });
         });
     </script>
+
+    
 </body>
 </html>
 

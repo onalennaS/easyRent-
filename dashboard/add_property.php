@@ -161,10 +161,22 @@ function saveImageToDB($conn, $property_id, $image_url, $is_primary) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 }
+// Handle amenities
+$selected_amenities = isset($_POST['amenities']) ? $_POST['amenities'] : [];
 
 // Check for success message from redirect
 if (isset($_GET['success'])) {
     $success_message = "Property added successfully! It will be available after admin approval.";
+}
+// Save amenities to database
+if (!empty($selected_amenities)) {
+    foreach ($selected_amenities as $amenity_id) {
+        $amenity_query = "INSERT INTO property_amenities (property_id, amenity_id) VALUES (?, ?)";
+        $amenity_stmt = mysqli_prepare($conn, $amenity_query);
+        mysqli_stmt_bind_param($amenity_stmt, "ii", $property_id, $amenity_id);
+        mysqli_stmt_execute($amenity_stmt);
+        mysqli_stmt_close($amenity_stmt);
+    }
 }
 ?>
 
@@ -175,6 +187,8 @@ if (isset($_GET['success'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Property - Easy Rent</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
         * {
             margin: 0;
@@ -183,35 +197,33 @@ if (isset($_GET['success'])) {
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 16px;
             background: #f8fafc;
             color: #1e293b;
             line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
         }
 
-        /* Top Navigation */
-        .top-nav {
+        /* Sidebar Styles */
+        .sidebar {
+            width: 250px;
             background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
             color: white;
-            padding: 0 2rem;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 1000;
         }
 
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
+        .sidebar-header {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .logo {
+        .sidebar-logo {
             font-size: 1.5rem;
             font-weight: bold;
             display: flex;
@@ -219,35 +231,15 @@ if (isset($_GET['success'])) {
             gap: 0.5rem;
         }
 
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-menu a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-menu a:hover,
-        .nav-menu a.active {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        }
-
-        .user-profile {
+        .sidebar-user {
+            padding: 1.5rem 1rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .profile-avatar {
+        .user-avatar {
             width: 40px;
             height: 40px;
             background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
@@ -259,13 +251,87 @@ if (isset($_GET['success'])) {
             font-size: 1.1rem;
         }
 
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .user-role {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            list-style: none;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .logout-link {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+        }
+
         /* Main Content */
         .main-content {
-            margin-top: 70px;
+            flex: 1;
+            margin-left: 250px;
             padding: 2rem;
-            max-width: 1200px;
-            margin-left: auto;
-            margin-right: auto;
+            transition: all 0.3s ease;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
         }
 
         /* Page Header */
@@ -294,7 +360,7 @@ if (isset($_GET['success'])) {
             z-index: 2;
         }
 
-        .page-title {
+        .page-title-large {
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 0.5rem;
@@ -311,22 +377,23 @@ if (isset($_GET['success'])) {
         /* Form Container */
         .form-container {
             background: white;
-            border-radius: 20px;
-            padding: 2rem;
+            border-radius: 16px;
+            padding: 1.5rem;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e5e7eb;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
 
         /* Alert Messages */
         .alert {
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 2rem;
+            padding: 0.8rem 1.2rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.6rem;
             font-weight: 500;
+            font-size: 0.85rem;
         }
 
         .alert-success {
@@ -344,31 +411,31 @@ if (isset($_GET['success'])) {
         /* Form Styles */
         .form-grid {
             display: grid;
-            gap: 2rem;
+            gap: 1.5rem;
         }
 
         .form-section {
             background: #f8fafc;
-            border-radius: 16px;
-            padding: 2rem;
+            border-radius: 12px;
+            padding: 1.5rem;
             border: 1px solid #e2e8f0;
         }
 
         .section-title {
-            font-size: 1.25rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #1e293b;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.2rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
         .form-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.2rem;
+            margin-bottom: 1.2rem;
         }
 
         .form-row.single {
@@ -383,10 +450,11 @@ if (isset($_GET['success'])) {
         .form-label {
             font-weight: 600;
             color: #374151;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
             display: flex;
             align-items: center;
-            gap: 0.25rem;
+            gap: 0.2rem;
+            font-size: 0.85rem;
         }
 
         .required {
@@ -396,10 +464,10 @@ if (isset($_GET['success'])) {
         .form-input,
         .form-select,
         .form-textarea {
-            padding: 0.75rem 1rem;
+            padding: 0.6rem 0.8rem;
             border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
             transition: all 0.3s ease;
             background: white;
         }
@@ -414,23 +482,23 @@ if (isset($_GET['success'])) {
 
         .form-textarea {
             resize: vertical;
-            min-height: 120px;
+            min-height: 100px;
         }
 
         .checkbox-group {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.8rem;
         }
 
         .checkbox-item {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem;
+            gap: 0.4rem;
+            padding: 0.6rem;
             background: white;
             border: 2px solid #e5e7eb;
-            border-radius: 10px;
+            border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
         }
@@ -441,14 +509,15 @@ if (isset($_GET['success'])) {
         }
 
         .checkbox-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             accent-color: #3b82f6;
         }
 
         .checkbox-item label {
             cursor: pointer;
             font-weight: 500;
+            font-size: 0.82rem;
         }
 
         /* Input Icons */
@@ -458,29 +527,30 @@ if (isset($_GET['success'])) {
 
         .input-icon i {
             position: absolute;
-            left: 1rem;
+            left: 0.8rem;
             top: 50%;
             transform: translateY(-50%);
             color: #6b7280;
             z-index: 2;
+            font-size: 0.8rem;
         }
 
         .input-icon input {
-            padding-left: 2.5rem;
+            padding-left: 2.2rem;
         }
 
         /* Buttons */
         .btn {
-            padding: 0.75rem 2rem;
-            border-radius: 12px;
+            padding: 0.6rem 1.5rem;
+            border-radius: 10px;
             border: none;
-            font-size: 1rem;
+            font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
             text-decoration: none;
             justify-content: center;
         }
@@ -492,7 +562,7 @@ if (isset($_GET['success'])) {
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
         }
 
         .btn-secondary {
@@ -508,25 +578,84 @@ if (isset($_GET['success'])) {
 
         .form-actions {
             display: flex;
-            gap: 1rem;
+            gap: 0.8rem;
             justify-content: flex-end;
-            margin-top: 2rem;
-            padding-top: 2rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
             border-top: 1px solid #e5e7eb;
         }
 
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        
+        .preview-item {
+            position: relative;
+            width: 100px;
+            height: 75px;
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .remove-image {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
         /* Responsive Design */
+        @media (max-width: 900px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .mobile-menu-btn {
+                display: block;
+            }
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 padding: 1rem;
             }
 
             .form-container {
-                padding: 1.5rem;
+                padding: 1.2rem;
             }
 
             .form-section {
-                padding: 1.5rem;
+                padding: 1.2rem;
             }
 
             .form-row {
@@ -543,15 +672,11 @@ if (isset($_GET['success'])) {
         }
 
         @media (max-width: 640px) {
-            .nav-container {
-                padding: 0 1rem;
-            }
-
             .page-header {
                 padding: 1.5rem;
             }
 
-            .page-title {
+            .page-title-large {
                 font-size: 1.5rem;
             }
 
@@ -559,84 +684,95 @@ if (isset($_GET['success'])) {
                 grid-template-columns: 1fr;
             }
         }
-
-
-       .image-preview {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-top: 10px;
-        }
-        
-        .preview-item {
-            position: relative;
-            width: 120px;
-            height: 90px;
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .preview-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .remove-image {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: rgba(255, 0, 0, 0.7);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <div class="logo">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
                 <i class="fas fa-home"></i>
                 Easy Rent
             </div>
-            
-            <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
-                <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php">Applications</a></li>
-                <li><a href="add_property.php">Add Property</a></li>
-                <li><a href="maintenance.php">Maintenance</a></li>
-                <li><a href="tenants.php">Tenants</a></li>
-                <li><a href="reports.php">Reports</a></li>
-            </ul>
-            
-            <div class="user-profile">
-                <span>Welcome, <?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></span>
-                <div class="profile-avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
-                </div>
-                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
-                    <i class="fas fa-sign-out-alt"></i>
-                </a>
+        </div>
+        
+        <div class="sidebar-user">
+            <div class="user-avatar">
+                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
+            </div>
+            <div class="user-info">
+                <div class="user-name"><?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></div>
+                <div class="user-role">Landlord</div>
             </div>
         </div>
-    </nav>
+        
+        <ul class="sidebar-nav">
+            <li class="nav-item">
+                <a href="landlord_dashboard.php" class="nav-link">
+                    <i class="fas fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="my_properties.php" class="nav-link">
+                    <i class="fas fa-building"></i>
+                    <span>My Properties</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="applications.php" class="nav-link">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Applications</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="add_property.php" class="nav-link active">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Add Property</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="maintenance.php" class="nav-link">
+                    <i class="fas fa-tools"></i>
+                    <span>Maintenance</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="tenants.php" class="nav-link">
+                    <i class="fas fa-users"></i>
+                    <span>Tenants</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="reports.php" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Reports</span>
+                </a>
+            </li>
+            <li class="nav-item logout-link">
+                <a href="../auth/logout.php" class="nav-link" id="logoutLink">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </aside>
 
     <!-- Main Content -->
     <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <button class="mobile-menu-btn">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title">Add New Property</h1>
+            <div></div> <!-- Empty div for spacing -->
+        </div>
+
         <!-- Page Header -->
         <div class="page-header">
             <div class="page-header-content">
-                <h1 class="page-title">
+                <h1 class="page-title-large">
                     <i class="fas fa-plus-circle"></i>
                     Add New Property
                 </h1>
@@ -661,7 +797,7 @@ if (isset($_GET['success'])) {
 
         <!-- Form Container -->
         <div class="form-container">
-            <form method="POST" action="add_property.php" enctype="multipart/form-data">
+            <form method="POST" action="add_property.php" enctype="multipart/form-data" id="propertyForm">
                 <div class="form-grid">
                     <!-- Basic Information -->
                     <div class="form-section">
@@ -765,9 +901,10 @@ if (isset($_GET['success'])) {
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label" for="bedrooms">
-                                    Bedrooms
+                                    Bedrooms <span class="required">*</span>
                                 </label>
-                                <select id="bedrooms" name="bedrooms" class="form-select">
+                                <select id="bedrooms" name="bedrooms" class="form-select" required>
+                                    <option value="">Select Bedrooms</option>
                                     <option value="0">Studio</option>
                                     <option value="1">1 Bedroom</option>
                                     <option value="2">2 Bedrooms</option>
@@ -779,9 +916,10 @@ if (isset($_GET['success'])) {
                             
                             <div class="form-group">
                                 <label class="form-label" for="bathrooms">
-                                    Bathrooms
+                                    Bathrooms <span class="required">*</span>
                                 </label>
-                                <select id="bathrooms" name="bathrooms" class="form-select">
+                                <select id="bathrooms" name="bathrooms" class="form-select" required>
+                                    <option value="">Select Bathrooms</option>
                                     <option value="1">1 Bathroom</option>
                                     <option value="1.5">1.5 Bathrooms</option>
                                     <option value="2">2 Bathrooms</option>
@@ -794,105 +932,239 @@ if (isset($_GET['success'])) {
                             
                             <div class="form-group">
                                 <label class="form-label" for="square_meters">
-                                    Square Meters
+                                    Square Meters <span class="required">*</span>
                                 </label>
                                 <div class="input-icon">
                                     <i class="fas fa-expand-arrows-alt"></i>
                                     <input type="number" id="square_meters" name="square_meters" class="form-input" 
-                                           placeholder="e.g., 85" min="0" step="0.1">
+                                           placeholder="e.g., 85" min="0" step="0.1" required>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Pricing -->
-<div class="form-section">
-    <h2 class="section-title">
-        <i class="fas fa-random"></i> <!-- optional: change icon if needed -->
-        Pricing
-    </h2>
-    
-    <div class="form-row">
-        <div class="form-group">
-            <label class="form-label" for="rent_amount">
-                Monthly Rent <span class="required">*</span>
-            </label>
-            <div class="input-icon">
-                <span class="currency-symbol">R</span>
-                <input type="number" id="rent_amount" name="rent_amount" class="form-input" 
-                       placeholder="e.g., 1200" min="0" step="0.01" required>
-            </div>
-        </div>
-    </div>
-</div>
-
-                            
-                            <div class="form-group">
-    <label class="form-label" for="deposit_amount">
-        Security Deposit
-    </label>
-    <div class="input-icon">
-        <span class="currency-symbol">R</span>
-        <input type="number" id="deposit_amount" name="deposit_amount" class="form-input" 
-               placeholder="e.g., 1200" min="0" step="0.01">
-    </div>
-</div>
-
-<div class="form-group">
-    <label class="form-label" for="lease_duration_months">
-        Lease Duration (Months)
-    </label>
-    <select id="lease_duration_months" name="lease_duration_months" class="form-select">
-        <option value="12">12 Months</option>
-        <option value="6">6 Months</option>
-        <option value="24">24 Months</option>
-        <option value="36">36 Months</option>
-        <option value="0">Month-to-Month</option>
-    </select>
-</div>
-
-
-                    <!-- Features & Amenities -->
                     <div class="form-section">
                         <h2 class="section-title">
-                            <i class="fas fa-star"></i>
-                            Features & Amenities
+                            <i class="fas fa-tag"></i>
+                            Pricing
                         </h2>
                         
-                        <div class="checkbox-group">
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="utilities_included" name="utilities_included" value="1">
-                                <label for="utilities_included">
-                                    <i class="fas fa-lightbulb"></i>
-                                    Utilities Included
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="rent_amount">
+                                    Monthly Rent <span class="required">*</span>
                                 </label>
+                                <div class="input-icon">
+                                    <span style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); font-size: 0.8rem;">R</span>
+                                    <input type="number" id="rent_amount" name="rent_amount" class="form-input" 
+                                           placeholder="e.g., 1200" min="0" step="0.01" required style="padding-left: 1.8rem;">
+                                </div>
                             </div>
                             
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="parking_available" name="parking_available" value="1">
-                                <label for="parking_available">
-                                    <i class="fas fa-car"></i>
-                                    Parking Available
+                            <div class="form-group">
+                                <label class="form-label" for="deposit_amount">
+                                    Security Deposit <span class="required">*</span>
                                 </label>
+                                <div class="input-icon">
+                                    <span style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); font-size: 0.8rem;">R</span>
+                                    <input type="number" id="deposit_amount" name="deposit_amount" class="form-input" 
+                                           placeholder="e.g., 1200" min="0" step="0.01" required style="padding-left: 1.8rem;">
+                                </div>
                             </div>
                             
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="pet_friendly" name="pet_friendly" value="1">
-                                <label for="pet_friendly">
-                                    <i class="fas fa-paw"></i>
-                                    Pet Friendly
+                            <div class="form-group">
+                                <label class="form-label" for="lease_duration_months">
+                                    Lease Duration (Months) <span class="required">*</span>
                                 </label>
-                            </div>
-                            
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="furnished" name="furnished" value="1">
-                                <label for="furnished">
-                                    <i class="fas fa-couch"></i>
-                                    Furnished
-                                </label>
+                                <select id="lease_duration_months" name="lease_duration_months" class="form-select" required>
+                                    <option value="">Select Duration</option>
+                                    <option value="12">12 Months</option>
+                                    <option value="6">6 Months</option>
+                                    <option value="24">24 Months</option>
+                                    <option value="36">36 Months</option>
+                                    <option value="0">Month-to-Month</option>
+                                </select>
                             </div>
                         </div>
                     </div>
+
+                   <!-- Features & Amenities -->
+<div class="form-section">
+    <h2 class="section-title">
+        <i class="fas fa-star"></i>
+        Features & Amenities
+    </h2>
+    
+    <div class="checkbox-group">
+        <!-- Recreation -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="swimming_pool" name="amenities[]" value="1">
+            <label for="swimming_pool">
+                <i class="fas fa-swimmer"></i>
+                Swimming Pool
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="gym_fitness" name="amenities[]" value="2">
+            <label for="gym_fitness">
+                <i class="fas fa-dumbbell"></i>
+                Gym/Fitness Center
+            </label>
+        </div>
+        
+        <!-- Security -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="security_guard" name="amenities[]" value="3">
+            <label for="security_guard">
+                <i class="fas fa-shield-alt"></i>
+                Security Guard
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="cctv" name="amenities[]" value="4">
+            <label for="cctv">
+                <i class="fas fa-video"></i>
+                CCTV Surveillance
+            </label>
+        </div>
+        
+        <!-- Parking & Outdoor -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="parking_bay" name="amenities[]" value="5">
+            <label for="parking_bay">
+                <i class="fas fa-car"></i>
+                Parking Bay
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="garden_yard" name="amenities[]" value="6">
+            <label for="garden_yard">
+                <i class="fas fa-tree"></i>
+                Garden/Yard
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="balcony" name="amenities[]" value="7">
+            <label for="balcony">
+                <i class="fas fa-building"></i>
+                Balcony
+            </label>
+        </div>
+        
+        <!-- Utilities -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="air_conditioning" name="amenities[]" value="8">
+            <label for="air_conditioning">
+                <i class="fas fa-snowflake"></i>
+                Air Conditioning
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="wifi" name="amenities[]" value="9">
+            <label for="wifi">
+                <i class="fas fa-wifi"></i>
+                WiFi Internet
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="laundry" name="amenities[]" value="10">
+            <label for="laundry">
+                <i class="fas fa-tshirt"></i>
+                Laundry Facilities
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="backup_generator" name="amenities[]" value="17">
+            <label for="backup_generator">
+                <i class="fas fa-bolt"></i>
+                Backup Generator
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="water_tank" name="amenities[]" value="18">
+            <label for="water_tank">
+                <i class="fas fa-tint"></i>
+                Water Tank
+            </label>
+        </div>
+        
+        <!-- Appliances -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="dishwasher" name="amenities[]" value="11">
+            <label for="dishwasher">
+                <i class="fas fa-utensils"></i>
+                Dishwasher
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="microwave" name="amenities[]" value="12">
+            <label for="microwave">
+                <i class="fas fa-microwave"></i>
+                Microwave
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="refrigerator" name="amenities[]" value="13">
+            <label for="refrigerator">
+                <i class="fas fa-refrigerator"></i>
+                Refrigerator
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="washing_machine" name="amenities[]" value="14">
+            <label for="washing_machine">
+                <i class="fas fa-washing-machine"></i>
+                Washing Machine
+            </label>
+        </div>
+        
+        <!-- Building & Policies -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="elevator" name="amenities[]" value="16">
+            <label for="elevator">
+                <i class="fas fa-elevator"></i>
+                Elevator
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="pet_friendly" name="amenities[]" value="15">
+            <label for="pet_friendly">
+                <i class="fas fa-paw"></i>
+                Pet Friendly
+            </label>
+        </div>
+        
+        <!-- Keep existing checkboxes -->
+        <div class="checkbox-item">
+            <input type="checkbox" id="utilities_included" name="utilities_included" value="1">
+            <label for="utilities_included">
+                <i class="fas fa-lightbulb"></i>
+                Utilities Included
+            </label>
+        </div>
+        
+        <div class="checkbox-item">
+            <input type="checkbox" id="furnished" name="furnished" value="1">
+            <label for="furnished">
+                <i class="fas fa-couch"></i>
+                Furnished
+            </label>
+        </div>
+    </div>
+</div>
 
                     <!-- Availability -->
                     <div class="form-section">
@@ -904,10 +1176,10 @@ if (isset($_GET['success'])) {
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label" for="available_from">
-                                    Available From
+                                    Available From <span class="required">*</span>
                                 </label>
                                 <input type="date" id="available_from" name="available_from" class="form-input" 
-                                       value="<?php echo date('Y-m-d'); ?>" min="<?php echo date('Y-m-d'); ?>">
+                                       value="<?php echo date('Y-m-d'); ?>" min="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                         </div>
                     </div>
@@ -987,7 +1259,7 @@ if (isset($_GET['success'])) {
                         <i class="fas fa-times"></i>
                         Cancel
                     </a>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="button" class="btn btn-primary" id="submitBtn">
                         <i class="fas fa-plus"></i>
                         Add Property
                     </button>
@@ -1039,28 +1311,170 @@ if (isset($_GET['success'])) {
         for (let i = 1; i <= 5; i++) {
             setupImagePreview('image_' + i, 'preview-' + i);
         }
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script>
-  document.getElementById('logoutLink').addEventListener('click', function(e) {
-    e.preventDefault(); // prevent default link behavior
 
-    Swal.fire({
-      title: 'Are you sure?',
-      text: 'You will be logged out from your account.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6', // blue
-      cancelButtonColor: '#d33',     // red
-      confirmButtonText: 'Yes, log out',
-      cancelButtonText: 'Cancel'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        // ✅ Perform your logout action here
-        window.location.href = '../auth/logout.php'; // Replace with your logout URL
-      }
-    });
-  });
-</script>
+        // Mobile menu toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+        
+        if (mobileMenuBtn && sidebar) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+            });
+
+            // Close sidebar when clicking outside on mobile
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth < 900 && 
+                    sidebar.classList.contains('active') && 
+                    !sidebar.contains(e.target) && 
+                    !mobileMenuBtn.contains(e.target)) {
+                    sidebar.classList.remove('active');
+                }
+            });
+        }
+
+        // Form submission with Sweet Alert confirmation and validation
+        document.getElementById('submitBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Form validation
+            const form = document.getElementById('propertyForm');
+            const requiredFields = [];
+            
+            // Check all required fields
+            const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
+            inputs.forEach(field => {
+                if (!field.value.trim()) {
+                    const label = form.querySelector(`label[for="${field.id}"]`);
+                    const fieldName = label ? label.textContent.replace(' *', '') : field.name;
+                    requiredFields.push(fieldName);
+                }
+            });
+            
+            // If there are missing required fields, show error alert
+            if (requiredFields.length > 0) {
+                let fieldsList = '';
+                requiredFields.forEach((field, index) => {
+                    fieldsList += `<li style="text-align: left; margin: 5px 0;">${field}</li>`;
+                });
+                
+                Swal.fire({
+                    title: 'Missing Required Fields',
+                    html: `
+                        <div style="text-align: left;">
+                            <p style="margin-bottom: 15px; color: #666;">Please fill in the following required fields:</p>
+                            <ul style="margin-left: 20px; color: #e74c3c; font-weight: 500;">
+                                ${fieldsList}
+                            </ul>
+                            <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                                <i class="fas fa-info-circle"></i> 
+                                All fields marked with a red asterisk (*) are required.
+                            </p>
+                        </div>
+                    `,
+                    icon: 'error',
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'OK, I\'ll complete them',
+                    customClass: {
+                        popup: 'swal-wide'
+                    }
+                });
+                return;
+            }
+            
+            // If all fields are filled, proceed with confirmation
+            // First confirmation - Review reminder
+            Swal.fire({
+                title: 'Please Review Your Information',
+                html: `
+                    <div style="text-align: left; margin: 20px 0;">
+                        <p style="margin-bottom: 15px; color: #666;">Please carefully review all the information you've entered:</p>
+                        <ul style="margin-left: 20px; color: #666;">
+                            <li>Property title and description</li>
+                            <li>Location and address details</li>
+                            <li>Pricing and lease terms</li>
+                            <li>Property features and amenities</li>
+                            <li>Images uploaded</li>
+                        </ul>
+                        <p style="margin-top: 15px; color: #e74c3c; font-weight: 600;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Important: Once submitted, you won't be able to edit this property until admin approval.
+                        </p>
+                    </div>
+                `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Continue to Submit',
+                cancelButtonText: 'Let me review',
+                customClass: {
+                    popup: 'swal-wide'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Second confirmation - Final submission
+                    Swal.fire({
+                        title: 'Add This Property?',
+                        text: 'Are you sure you want to add this property to your listings?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#28a745',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, Add Property',
+                        cancelButtonText: 'Cancel'
+                    }).then((finalResult) => {
+                        if (finalResult.isConfirmed) {
+                            // Show loading
+                            Swal.fire({
+                                title: 'Adding Property...',
+                                text: 'Please wait while we process your request.',
+                                icon: 'info',
+                                allowOutsideClick: false,
+                                showConfirmButton: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+                            
+                            // Submit the form
+                            document.getElementById('propertyForm').submit();
+                        }
+                    });
+                }
+            });
+        });
+
+        // Logout confirmation
+        document.getElementById('logoutLink').addEventListener('click', function(e) {
+            e.preventDefault();
+
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'You will be logged out from your account.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, log out',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
+        });
+
+        // Custom SweetAlert2 styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .swal-wide {
+                width: 600px !important;
+            }
+            .swal2-html-container {
+                font-size: 14px !important;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 </body>
 </html>

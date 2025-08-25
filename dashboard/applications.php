@@ -39,44 +39,21 @@ if ($applications_result) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
     $application_id = $_POST['application_id'];
     $new_status = $_POST['status'];
-    $landlord_notes = mysqli_real_escape_string($conn, $_POST['landlord_notes'] ?? '');
     
-    // For non-approved statuses
-    if ($new_status != 'approved') {
-        $update_query = "
-            UPDATE rental_applications 
-            SET status = '$new_status', 
-                landlord_notes = '$landlord_notes',
-                reviewed_at = NOW(),
-                reviewed_by = $landlord_id
-            WHERE id = $application_id
-        ";
-        
-        if (mysqli_query($conn, $update_query)) {
-            $success_message = "Application status updated successfully!";
+    // Check if application is already approved
+    $check_query = "SELECT status FROM rental_applications WHERE id = $application_id";
+    $check_result = mysqli_query($conn, $check_query);
+    
+    if ($check_result) {
+        $current_app = mysqli_fetch_assoc($check_result);
+        if ($current_app['status'] === 'approved') {
+            $error_message = "This application has already been approved and cannot be modified.";
         } else {
-            $error_message = "Error updating application: " . mysqli_error($conn);
-        }
-    } 
-    // For approved status
-    else {
-        // Get application details
-        $app_query = "SELECT * FROM rental_applications WHERE id = $application_id";
-        $app_result = mysqli_query($conn, $app_query);
-        
-        if (!$app_result) {
-            $error_message = "Error fetching application: " . mysqli_error($conn);
-        } else {
-            $application = mysqli_fetch_assoc($app_result);
+            // Continue with existing logic
+            $landlord_notes = mysqli_real_escape_string($conn, $_POST['landlord_notes'] ?? '');
             
-            // Get monthly rent from form submission
-            $monthly_rent = $_POST['monthly_rent'];
-            
-            // Validate monthly rent
-            if (empty($monthly_rent) || !is_numeric($monthly_rent) || $monthly_rent <= 0) {
-                $error_message = "Invalid monthly rent value. Please enter a valid rent amount.";
-            } else {
-                // Update application status first
+            // For non-approved statuses
+            if ($new_status != 'approved') {
                 $update_query = "
                     UPDATE rental_applications 
                     SET status = '$new_status', 
@@ -87,67 +64,103 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                 ";
                 
                 if (mysqli_query($conn, $update_query)) {
-                    // Validate and format move_in_date
-                    $move_in_date = $application['move_in_date'] ?? null;
-                    
-                    if ($move_in_date && strtotime($move_in_date)) {
-                        $move_in_date = date('Y-m-d', strtotime($move_in_date));
-                    } else {
-                        $move_in_date = date('Y-m-d', strtotime('+7 days'));
-                        $error_message = "Invalid move-in date detected. Using fallback date: " . date('M d, Y', strtotime($move_in_date));
-                    }
-                    
-                    // Calculate end date
-                    $end_date = date('Y-m-d', strtotime($move_in_date . " + {$application['lease_duration_months']} months"));
-                    
-                    // Create lease
-                    $stmt = $conn->prepare("
-                        INSERT INTO leases (
-                            property_id, 
-                            tenant_id, 
-                            landlord_id,
-                            application_id,
-                            lease_start_date,
-                            lease_end_date,
-                            monthly_rent,
-                            security_deposit,
-                            status
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-                    ");
-                    
-                    // Bind parameters
-                    $stmt->bind_param(
-                        "iiiissdd", 
-                        $application['property_id'],
-                        $application['tenant_id'],
-                        $landlord_id,
-                        $application_id,
-                        $move_in_date,
-                        $end_date,
-                        $monthly_rent,  // Use rent from form
-                        $monthly_rent   // Security deposit = 1 month rent
-                    );
-                    
-                    if ($stmt->execute()) {
-                        $lease_id = $stmt->insert_id;
-                        $success_message = "Application approved and lease #$lease_id created!";
-                        
-                        // Send notification to tenant
-                        $tenant_id = $application['tenant_id'];
-                        $property_id = $application['property_id'];
-                        $message = "Your application for property #$property_id has been approved! Please sign your lease agreement.";
-                        
-                        $notif_query = "
-                            INSERT INTO notifications (user_id, message, type, is_read, created_at)
-                            VALUES ($tenant_id, '$message', 'application', 0, NOW())
-                        ";
-                        mysqli_query($conn, $notif_query);
-                    } else {
-                        $error_message = "Lease creation failed: " . $stmt->error;
-                    }
-                    $stmt->close();
+                    $success_message = "Application status updated successfully!";
                 } else {
                     $error_message = "Error updating application: " . mysqli_error($conn);
+                }
+            } 
+            // For approved status
+            else {
+                // Get application details
+                $app_query = "SELECT * FROM rental_applications WHERE id = $application_id";
+                $app_result = mysqli_query($conn, $app_query);
+                
+                if (!$app_result) {
+                    $error_message = "Error fetching application: " . mysqli_error($conn);
+                } else {
+                    $application = mysqli_fetch_assoc($app_result);
+                    
+                    // Get monthly rent from form submission
+                    $monthly_rent = $_POST['monthly_rent'];
+                    
+                    // Validate monthly rent
+                    if (empty($monthly_rent) || !is_numeric($monthly_rent) || $monthly_rent <= 0) {
+                        $error_message = "Invalid monthly rent value. Please enter a valid rent amount.";
+                    } else {
+                        // Update application status first
+                        $update_query = "
+                            UPDATE rental_applications 
+                            SET status = '$new_status', 
+                                landlord_notes = '$landlord_notes',
+                                reviewed_at = NOW(),
+                                reviewed_by = $landlord_id
+                            WHERE id = $application_id
+                        ";
+                        
+                        if (mysqli_query($conn, $update_query)) {
+                            // Validate and format move_in_date
+                            $move_in_date = $application['move_in_date'] ?? null;
+                            
+                            if ($move_in_date && strtotime($move_in_date)) {
+                                $move_in_date = date('Y-m-d', strtotime($move_in_date));
+                            } else {
+                                $move_in_date = date('Y-m-d', strtotime('+7 days'));
+                                $error_message = "Invalid move-in date detected. Using fallback date: " . date('M d, Y', strtotime($move_in_date));
+                            }
+                            
+                            // Calculate end date
+                            $end_date = date('Y-m-d', strtotime($move_in_date . " + {$application['lease_duration_months']} months"));
+                            
+                            // Create lease
+                            $stmt = $conn->prepare("
+                                INSERT INTO leases (
+                                    property_id, 
+                                    tenant_id, 
+                                    landlord_id,
+                                    application_id,
+                                    lease_start_date,
+                                    lease_end_date,
+                                    monthly_rent,
+                                    security_deposit,
+                                    status
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                            ");
+                            
+                            // Bind parameters
+                            $stmt->bind_param(
+                                "iiiissdd", 
+                                $application['property_id'],
+                                $application['tenant_id'],
+                                $landlord_id,
+                                $application_id,
+                                $move_in_date,
+                                $end_date,
+                                $monthly_rent,  // Use rent from form
+                                $monthly_rent   // Security deposit = 1 month rent
+                            );
+                            
+                            if ($stmt->execute()) {
+                                $lease_id = $stmt->insert_id;
+                                $success_message = "Application approved and lease #$lease_id created!";
+                                
+                                // Send notification to tenant
+                                $tenant_id = $application['tenant_id'];
+                                $property_id = $application['property_id'];
+                                $message = "Your application for property #$property_id has been approved! Please sign your lease agreement.";
+                                
+                                $notif_query = "
+                                    INSERT INTO notifications (user_id, message, type, is_read, created_at)
+                                    VALUES ($tenant_id, '$message', 'application', 0, NOW())
+                                ";
+                                mysqli_query($conn, $notif_query);
+                            } else {
+                                $error_message = "Lease creation failed: " . $stmt->error;
+                            }
+                            $stmt->close();
+                        } else {
+                            $error_message = "Error updating application: " . mysqli_error($conn);
+                        }
+                    }
                 }
             }
         }
@@ -175,483 +188,607 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-        }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
+}
 
-        /* Top Navigation */
-        .top-nav {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-            padding: 0 2rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
 
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+.sidebar-header {
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+.sidebar-logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 2rem;
-            align-items: center;
-        }
+.sidebar-user {
+    padding: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-        .nav-menu a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
 
-        .nav-menu a:hover,
-        .nav-menu a.active {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        }
+.user-info {
+    flex: 1;
+}
 
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
+.user-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
 
-        .profile-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
+.user-role {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
 
-        /* Main Content */
-        .main-content {
-            margin-top: 70px;
-            padding: 2rem;
-            max-width: 1400px;
-            margin-left: auto;
-            margin-right: auto;
-        }
+.sidebar-nav {
+    padding: 1rem 0;
+}
 
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
+.nav-item {
+    list-style: none;
+}
 
-        .page-title {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #1e293b;
-        }
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.5rem;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
 
-        .page-actions {
-            display: flex;
-            gap: 1rem;
-        }
+.nav-link:hover,
+.nav-link.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: white;
+}
 
-        /* Filters */
-        .filters-section {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
-        }
+.nav-link i {
+    width: 20px;
+    text-align: center;
+}
 
-        .filters-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
+.logout-link {
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+}
 
-        .filters-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #1e293b;
-        }
+/* Main Content */
+.main-content {
+    flex: 1;
+    margin-left: 250px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
 
-        .filter-reset {
-            color: #3b82f6;
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
 
-        .filter-options {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1e293b;
+}
 
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-            min-width: 200px;
-        }
+.mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #64748b;
+    cursor: pointer;
+}
 
-        .filter-label {
-            font-size: 0.875rem;
-            color: #64748b;
-            margin-bottom: 0.5rem;
-        }
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
 
-        .filter-select {
-            padding: 0.75rem;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            background: white;
-            font-size: 0.9rem;
-        }
+.page-actions {
+    display: flex;
+    gap: 1rem;
+}
 
-        /* Applications Table */
-        .applications-table {
-            width: 100%;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
-            border-collapse: collapse;
-        }
+/* Filters */
+.filters-section {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+}
 
-        .applications-table thead {
-            background: #f1f5f9;
-        }
+.filters-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
 
-        .applications-table th {
-            padding: 1rem;
-            text-align: left;
-            font-weight: 600;
-            color: #1e293b;
-            border-bottom: 1px solid #e2e8f0;
-        }
+.filters-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+}
 
-        .applications-table td {
-            padding: 1rem;
-            border-bottom: 1px solid #f1f5f9;
-        }
+.filter-reset {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
 
-        .applications-table tr:last-child td {
-            border-bottom: none;
-        }
+.filter-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
 
-        .applications-table tr:hover {
-            background-color: #f8fafc;
-        }
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+}
 
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            display: inline-block;
-        }
+.filter-label {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+}
 
-        .status-pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
+.filter-select {
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    font-size: 0.9rem;
+}
 
-        .status-approved {
-            background: #dcfce7;
-            color: #166534;
-        }
+/* Applications Table */
+.applications-table {
+    width: 100%;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+    border-collapse: collapse;
+}
 
-        .status-rejected {
-            background: #fee2e2;
-            color: #991b1b;
-        }
+.applications-table thead {
+    background: #f1f5f9;
+}
 
-        .status-reviewed {
-            background: #dbeafe;
-            color: #1e40af;
-        }
+.applications-table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #1e293b;
+    border-bottom: 1px solid #e2e8f0;
+}
 
-        .tenant-info {
-            display: flex;
-            flex-direction: column;
-        }
+.applications-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
 
-        .tenant-name {
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
+.applications-table tr:last-child td {
+    border-bottom: none;
+}
 
-        .tenant-contact {
-            font-size: 0.875rem;
-            color: #64748b;
-        }
+.applications-table tr:hover {
+    background-color: #f8fafc;
+}
 
-        .application-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-block;
+}
 
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
+.status-pending {
+    background: #fef3c7;
+    color: #92400e;
+}
 
-        .btn-primary {
-            background: #3b82f6;
-            color: white;
-        }
+.status-approved {
+    background: #dcfce7;
+    color: #166534;
+}
 
-        .btn-primary:hover {
-            background: #1d4ed8;
-        }
+.status-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+}
 
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #475569;
-        }
+.status-reviewed {
+    background: #dbeafe;
+    color: #1e40af;
+}
 
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
+.tenant-info {
+    display: flex;
+    flex-direction: column;
+}
 
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
+.tenant-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
 
-        .btn-success:hover {
-            background: #059669;
-        }
+.tenant-contact {
+    font-size: 0.875rem;
+    color: #64748b;
+}
 
-        .btn-warning {
-            background: #f59e0b;
-            color: white;
-        }
+.application-actions {
+    display: flex;
+    gap: 0.5rem;
+}
 
-        .btn-warning:hover {
-            background: #d97706;
-        }
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
 
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
 
-        .btn-danger:hover {
-            background: #dc2626;
-        }
+.btn-primary:hover {
+    background: #1d4ed8;
+}
 
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+}
 
-        .modal-content {
-            background: white;
-            border-radius: 16px;
-            width: 100%;
-            max-width: 600px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 2rem;
-            position: relative;
-        }
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
+.btn-success {
+    background: #10b981;
+    color: white;
+}
 
-        .modal-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #1e293b;
-        }
+.btn-success:hover {
+    background: #059669;
+}
 
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #94a3b8;
-        }
+.btn-warning {
+    background: #f59e0b;
+    color: white;
+}
 
-        .close-modal:hover {
-            color: #64748b;
-        }
+.btn-warning:hover {
+    background: #d97706;
+}
 
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
 
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #1e293b;
-        }
+.btn-danger:hover {
+    background: #dc2626;
+}
 
-        .form-control {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            font-size: 1rem;
-        }
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
 
-        .form-control:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-        }
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 2rem;
+    position: relative;
+}
 
-        textarea.form-control {
-            min-height: 120px;
-            resize: vertical;
-        }
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
 
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
+.modal-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1e293b;
+}
 
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .applications-table {
-                display: block;
-                overflow-x: auto;
-            }
-        }
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #94a3b8;
+}
 
-        @media (max-width: 768px) {
-            .main-content {
-                padding: 1rem;
-            }
-            
-            .page-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-            
-            .filter-options {
-                flex-direction: column;
-            }
-            
-            .filter-group {
-                width: 100%;
-            }
-        }
+.close-modal:hover {
+    color: #64748b;
+}
 
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            color: #64748b;
-        }
+.form-group {
+    margin-bottom: 1.5rem;
+}
 
-        .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            color: #cbd5e1;
-        }
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    font-size: 1rem;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #64748b;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #cbd5e1;
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #475569;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .applications-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+@media (max-width: 900px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 280px;
+    }
+    
+    .sidebar.active {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .mobile-menu-btn {
+        display: block;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .filter-options {
+        flex-direction: column;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+}
     </style>
 </head>
 <body>
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <div class="logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
-            </div>
-            
-            <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php" class="active">Dashboard</a></li>
-                <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php">Applications</a></li>
-                <li><a href="add_property.php">Add Property</a></li>
-                <li><a href="maintenance.php">Maintenance</a></li>
-                <li><a href="tenants.php">Tenants</a></li>
-                <li><a href="reports.php">Reports</a></li>
-            </ul>
-            
-            <div class="user-profile">
-                <span>Welcome, <?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></span>
-                <div class="profile-avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
-                </div>
-                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;" id="logoutLink">
-                    <i class="fas fa-sign-out-alt"></i>
-                </a>
-            </div>
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">
+            <i class="fas fa-home"></i>
+            Easy Rent
         </div>
-    </nav>
+    </div>
+    
+    <div class="sidebar-user">
+        <div class="user-avatar">
+            <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
+        </div>
+        <div class="user-info">
+            <div class="user-name"><?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></div>
+            <div class="user-role">Landlord</div>
+        </div>
+    </div>
+    
+    <ul class="sidebar-nav">
+        <li class="nav-item">
+            <a href="landlord_dashboard.php" class="nav-link">
+                <i class="fas fa-th-large"></i>
+                <span>Dashboard</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="my_properties.php" class="nav-link">
+                <i class="fas fa-building"></i>
+                <span>My Properties</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="applications.php" class="nav-link active">
+                <i class="fas fa-file-alt"></i>
+                <span>Applications</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="add_property.php" class="nav-link">
+                <i class="fas fa-plus-circle"></i>
+                <span>Add Property</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="maintenance.php" class="nav-link">
+                <i class="fas fa-tools"></i>
+                <span>Maintenance</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="tenants.php" class="nav-link">
+                <i class="fas fa-users"></i>
+                <span>Tenants</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="reports.php" class="nav-link">
+                <i class="fas fa-chart-line"></i>
+                <span>Reports</span>
+            </a>
+        </li>
+        <li class="nav-item logout-link">
+            <a href="../auth/logout.php" class="nav-link" id="logoutLink">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </li>
+    </ul>
+</aside>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="page-header">
-            <h1 class="page-title">Rental Applications</h1>
-            <div class="page-actions">
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <button class="mobile-menu-btn">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="page-title">Rental Applications</h1>
+        <div></div> <!-- Empty div for spacing -->
+    </div>
+
+    <div class="page-header">
+        <div class="page-actions">
                 <button class="btn btn-primary">
                     <i class="fas fa-download"></i>
                     Export
@@ -708,9 +845,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                         <th>Property</th>
                         <th>Tenant</th>
                         <th>Application Date</th>
-                      
-                        
-                       
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -726,19 +860,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                                 <span class="tenant-contact"><?php echo htmlspecialchars($app['phone']); ?></span>
                             </td>
                             <td><?php echo date('M d, Y', strtotime($app['application_date'])); ?></td>
-                           
-                           
-                           
                             <td>
                                 <span class="status-badge status-<?php echo $app['status']; ?>">
                                     <?php echo ucfirst($app['status']); ?>
                                 </span>
                             </td>
                             <td class="application-actions">
-                                
-                                <button class="btn btn-warning update-status" data-id="<?php echo $app['id']; ?>">
-                                    <i class="fas fa-edit"></i>
-                                </button>
+                                <?php if ($app['status'] === 'approved'): ?>
+                                    <button class="btn btn-secondary" disabled title="Application already approved">
+                                        <i class="fas fa-lock"></i>
+                                    </button>
+                                <?php else: ?>
+                                    <button class="btn btn-warning update-status" data-id="<?php echo $app['id']; ?>">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -752,8 +888,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             </div>
         <?php endif; ?>
     </div>
-    
-   
     
     <!-- Update Status Modal -->
     <div class="modal" id="statusModal">
@@ -794,101 +928,251 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         </div>
     </div>
     
-    <script>
-        // Modal functionality
-        const modals = document.querySelectorAll('.modal');
-        const closeButtons = document.querySelectorAll('.close-modal');
-        const viewButtons = document.querySelectorAll('.view-details');
-        const updateButtons = document.querySelectorAll('.update-status');
-        const logoutLink = document.getElementById('logoutLink');
-        const statusSelect = document.getElementById('statusSelect');
-        const rentInputGroup = document.getElementById('rentInputGroup');
+   
+<script>
+// Modal functionality
+const modals = document.querySelectorAll('.modal');
+const closeButtons = document.querySelectorAll('.close-modal');
+const updateButtons = document.querySelectorAll('.update-status');
+const logoutLink = document.getElementById('logoutLink');
+const statusSelect = document.getElementById('statusSelect');
+const rentInputGroup = document.getElementById('rentInputGroup');
+
+// Show modal
+function openModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+}
+
+// Close modal
+function closeModal() {
+    modals.forEach(modal => {
+        modal.style.display = 'none';
+    });
+}
+
+// Update status button click
+updateButtons.forEach(button => {
+    button.addEventListener('click', function() {
+        const appId = this.getAttribute('data-id');
         
-        // Show modal
-        function openModal(modalId) {
-            document.getElementById(modalId).style.display = 'flex';
-        }
-        
-        // Close modal
-        function closeModal() {
-            modals.forEach(modal => {
-                modal.style.display = 'none';
-            });
-        }
-        
-        
-        
-        // Update status button click
-        updateButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const appId = this.getAttribute('data-id');
-                document.getElementById('statusApplicationId').value = appId;
-                
-                // Reset form state
-                rentInputGroup.style.display = 'none';
-                statusSelect.value = 'pending';
-                
-                openModal('statusModal');
-            });
-        });
-        
-        // Close modals when clicking close button or outside modal
-        closeButtons.forEach(button => {
-            button.addEventListener('click', closeModal);
-        });
-        
-        window.addEventListener('click', function(event) {
-            modals.forEach(modal => {
-                if (event.target === modal) {
-                    closeModal();
-                }
-            });
-        });
-        
-        // Show/hide rent input based on status selection
-        statusSelect.addEventListener('change', function() {
-            if (this.value === 'approved') {
-                rentInputGroup.style.display = 'block';
-            } else {
-                rentInputGroup.style.display = 'none';
-            }
-        });
-        
-        // Logout confirmation
-        logoutLink.addEventListener('click', function(e) {
-            e.preventDefault();
+        // Check if button is disabled (for approved applications)
+        if (this.disabled) {
             Swal.fire({
-                title: 'Are you sure?',
-                text: 'You will be logged out from your account.',
                 icon: 'warning',
+                title: 'Action Restricted',
+                text: 'This application has already been approved and cannot be modified.',
+                confirmButtonColor: '#3085d6'
+            });
+            return;
+        }
+        
+        document.getElementById('statusApplicationId').value = appId;
+        
+        // Reset form state
+        rentInputGroup.style.display = 'none';
+        statusSelect.value = 'pending';
+        
+        openModal('statusModal');
+    });
+});
+
+// Close modals when clicking close button or outside modal
+closeButtons.forEach(button => {
+    button.addEventListener('click', closeModal);
+});
+
+window.addEventListener('click', function(event) {
+    modals.forEach(modal => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+});
+
+// Show/hide rent input based on status selection
+statusSelect.addEventListener('change', function() {
+    if (this.value === 'approved') {
+        rentInputGroup.style.display = 'block';
+    } else {
+        rentInputGroup.style.display = 'none';
+    }
+});
+
+// Enhanced form submission with SweetAlert confirmation
+document.addEventListener('DOMContentLoaded', function() {
+    // Intercept form submission for status updates
+    const statusForm = document.querySelector('#statusModal form');
+    
+    if (statusForm) {
+        statusForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            
+            const formData = new FormData(this);
+            const status = formData.get('status');
+            const monthlyRent = formData.get('monthly_rent');
+            
+            // Determine confirmation message based on status
+            let title, text, confirmButtonText, icon, confirmButtonColor;
+            
+            switch(status) {
+                case 'approved':
+                    if (!monthlyRent || monthlyRent <= 0) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Missing Information',
+                            text: 'Please enter a valid monthly rent amount for approval.',
+                            confirmButtonColor: '#3085d6'
+                        });
+                        return;
+                    }
+                    
+                    // Format rent in South African Rand
+                    const formattedRent = new Intl.NumberFormat('en-ZA', {
+                        style: 'currency',
+                        currency: 'ZAR',
+                        minimumFractionDigits: 2
+                    }).format(monthlyRent);
+                    
+                    title = 'Approve Application?';
+                    text = `Are you sure you want to approve this application with a monthly rent of ${formattedRent}? This will create a new lease agreement.`;
+                    confirmButtonText = 'Yes, Approve';
+                    icon = 'success';
+                    confirmButtonColor = '#10b981';
+                    break;
+                    
+                case 'rejected':
+                    title = 'Reject Application?';
+                    text = 'Are you sure you want to reject this application? This action cannot be undone.';
+                    confirmButtonText = 'Yes, Reject';
+                    icon = 'warning';
+                    confirmButtonColor = '#ef4444';
+                    break;
+                    
+                case 'reviewed':
+                    title = 'Mark as Reviewed?';
+                    text = 'Are you sure you want to mark this application as reviewed?';
+                    confirmButtonText = 'Yes, Mark Reviewed';
+                    icon = 'info';
+                    confirmButtonColor = '#3b82f6';
+                    break;
+                    
+                default: // pending
+                    title = 'Update Status?';
+                    text = 'Are you sure you want to change this application status to pending?';
+                    confirmButtonText = 'Yes, Update';
+                    icon = 'question';
+                    confirmButtonColor = '#f59e0b';
+            }
+            
+            // Show confirmation dialog
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: icon,
                 showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, log out',
-                cancelButtonText: 'Cancel'
+                confirmButtonColor: confirmButtonColor,
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: confirmButtonText,
+                cancelButtonText: 'Cancel',
+                reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = this.href;
+                    // Show loading state
+                    Swal.fire({
+                        title: 'Processing...',
+                        text: 'Updating application status',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        willOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submit the form normally (not via JavaScript)
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'applications.php';
+                    
+                    // Add all form data as hidden inputs
+                    for (let [key, value] of formData.entries()) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value;
+                        form.appendChild(input);
+                    }
+                    
+                    // Add update_status field
+                    const updateInput = document.createElement('input');
+                    updateInput.type = 'hidden';
+                    updateInput.name = 'update_status';
+                    updateInput.value = '1';
+                    form.appendChild(updateInput);
+                    
+                    document.body.appendChild(form);
+                    form.submit();
                 }
             });
         });
-        
-        // Show success/error messages
-        <?php if (isset($success_message)): ?>
-            Swal.fire({
-                icon: 'success',
-                title: 'Success!',
-                text: <?= json_encode($success_message) ?>,
-                timer: 3000,
-                showConfirmButton: false
-            });
-        <?php elseif (isset($error_message)): ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: <?= json_encode($error_message) ?>
-            });
-        <?php endif; ?>
-    </script>
+    }
+});
+
+// Logout confirmation
+logoutLink.addEventListener('click', function(e) {
+    e.preventDefault();
+    Swal.fire({
+        title: 'Are you sure?',
+        text: 'You will be logged out from your account.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, log out',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = this.href;
+        }
+    });
+});
+
+// Mobile menu toggle
+const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+const sidebar = document.querySelector('.sidebar');
+
+if (mobileMenuBtn && sidebar) {
+    mobileMenuBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('active');
+    });
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth < 900 && 
+            sidebar.classList.contains('active') && 
+            !sidebar.contains(e.target) && 
+            !mobileMenuBtn.contains(e.target)) {
+            sidebar.classList.remove('active');
+        }
+    });
+}
+
+// Show success/error messages
+<?php if (isset($success_message)): ?>
+    Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: <?= json_encode($success_message) ?>,
+        timer: 3000,
+        showConfirmButton: false
+    });
+<?php elseif (isset($error_message)): ?>
+    Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: <?= json_encode($error_message) ?>
+    });
+<?php endif; ?>
+</script>
 </body>
 </html>

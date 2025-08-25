@@ -314,853 +314,217 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
     <style>
        
-        
-        /* Add this for lease preview button */
-        .view-lease-btn {
-            background-color: #4CAF50;
-            color: white;
-        }
-        
-        .view-lease-btn:hover {
-            background-color: #45a049;
-        }
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-        }
-
-        /* Top Navigation */
-        .top-nav {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-            padding: 0 2rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-/* Add this to your existing CSS */
-/* Improved spacing for templates and content */
-
-/* General content spacing */
-.modal-body,
-.tenant-details,
-.tenant-property {
-    line-height: 1.8;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-/* Paragraph spacing in templates */
-.template-preview p,
-.template-preview li,
-.terms-content p {
-    margin-bottom: 1.2rem;
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
 }
 
-/* Headings in templates */
-.template-preview h4 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.8rem;
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.sidebar-header {
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-user {
+    padding: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
     font-size: 1.1rem;
 }
 
-/* List items in templates */
-.template-preview ul {
-    margin-bottom: 1.5rem;
-    padding-left: 1.5rem;
+.user-info {
+    flex: 1;
 }
 
-.template-preview li {
-    margin-bottom: 0.5rem;
+.user-name {
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
-/* Form group spacing */
-.form-group {
-    margin-bottom: 1.8rem;
+.user-role {
+    font-size: 0.8rem;
+    opacity: 0.8;
 }
 
-
-
-/* Tenant details spacing */
-.detail-row {
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #f1f5f9;
+.sidebar-nav {
+    padding: 1rem 0;
 }
 
-/* Property section spacing */
-.tenant-property {
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+.nav-item {
+    list-style: none;
 }
 
-/* Button group spacing */
-.tenant-actions {
-    gap: 1rem;
-    margin-top: 1.5rem;
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.5rem;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
 }
 
-/* Summernote editor content spacing */
-.note-editor .note-editable p {
-    margin-bottom: 1.2rem;
-    line-height: 1.8;
+.nav-link:hover,
+.nav-link.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: white;
 }
 
-/* Template preview container */
-.template-preview {
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-    line-height: 1.8;
+.nav-link i {
+    width: 20px;
+    text-align: center;
 }
 
-/* Modal content spacing */
-.modal-body {
+.logout-link {
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    margin-left: 250px;
     padding: 2rem;
+    transition: all 0.3s ease;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .modal-body {
-        padding: 1.5rem;
-    }
-    
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-    
-    .tenant-property {
-        padding: 1.2rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .modal-body {
-        padding: 1rem;
-    }
-    
-    .form-group {
-        margin-bottom: 1.2rem;
-    }
-    
-    .template-preview {
-        padding: 1rem;
-    }
-}
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-menu a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-menu a:hover,
-        .nav-menu a.active {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .profile-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-
-        /* Main Content */
-        .main-content {
-            margin-top: 70px;
-            padding: 2rem;
-            max-width: 1400px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        /* Page Header */
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .page-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #1e293b;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1d4ed8;
-        }
-
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #059669;
-        }
-
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #475569;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-        }
-
-        /* Tenant Cards */
-        .tenant-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .tenant-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
-            transition: all 0.3s ease;
-        }
-
-        .tenant-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .tenant-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .tenant-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-right: 1rem;
-        }
-
-        .tenant-info h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-
-        .tenant-info p {
-            color: #64748b;
-            font-size: 0.9rem;
-        }
-
-        .tenant-details {
-            margin-bottom: 1.5rem;
-        }
-
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.75rem;
-            font-size: 0.9rem;
-        }
-
-        .detail-label {
-            color: #64748b;
-            font-weight: 500;
-        }
-
-        .detail-value {
-            color: #1e293b;
-            font-weight: 500;
-            text-align: right;
-        }
-
-        .tenant-property {
-            background: #f1f5f9;
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .property-title {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .property-address {
-            color: #64748b;
-            font-size: 0.9rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .lease-status {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .status-draft {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-signed {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .status-pending {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .tenant-actions {
-            display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        /* Modals */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 16px;
-            width: 100%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 50px rgba(0,0,0,0.2);
-        }
-
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #94a3b8;
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #1e293b;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-        }
-
-        textarea.form-control {
-            min-height: 200px;
-            resize: vertical;
-        }
-
-        
-
-        /* Alerts */
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .alert-success {
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .alert i {
-            font-size: 1.25rem;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        }
-
-        .empty-state i {
-            font-size: 3rem;
-            color: #cbd5e1;
-            margin-bottom: 1rem;
-        }
-
-        .empty-state h3 {
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
-            color: #1e293b;
-        }
-
-        .empty-state p {
-            color: #64748b;
-            margin-bottom: 1.5rem;
-        }
-
-        /* Template Preview */
-        .template-preview {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .template-preview h4 {
-            margin-bottom: 0.5rem;
-            color: #1e293b;
-        }
-        
-        /* Summernote editor styling */
-        .note-editor {
-            border-radius: 8px;
-            border: 1px solid #cbd5e1;
-            overflow: hidden;
-        }
-
-        .note-editor .note-toolbar {
-            background: #f1f5f9;
-            border-bottom: 1px solid #cbd5e1;
-        }
-        
-        
-        /* Add to your existing CSS */
-.template-section {
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.template-section h5 {
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 700;
     color: #1e293b;
-    font-weight: 600;
-}
-
-.placeholder-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    display: flex;
+    align-items: center;
     gap: 0.75rem;
-    margin-top: 1rem;
 }
 
-.placeholder-item {
-    background: #f8fafc;
-    padding: 0.75rem;
-    border-radius: 6px;
-    border-left: 3px solid #3b82f6;
-}
-
-.placeholder-name {
-    display: block;
-    font-weight: 600;
-    color: #1e40af;
-    margin-bottom: 0.25rem;
-}
-
-.placeholder-desc {
-    display: block;
-    font-size: 0.85rem;
+.mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
     color: #64748b;
+    cursor: pointer;
 }
 
-.template-preview {
-    background: #f8fafc;
-    border: 1px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-    font-size: 0.9rem;
-    line-height: 1.7;
-}
-
-.template-preview h4 {
-    color: #1e293b;
-    margin-bottom: 1rem;
-    font-size: 1.1rem;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 0.5rem;
-}
-
-.template-preview ul {
-    margin-bottom: 1.5rem;
-    padding-left: 1.5rem;
-}
-
-.template-preview li {
-    margin-bottom: 0.5rem;
-}
-
-
-        /* Add this for lease preview button */
-        .view-lease-btn {
-            background-color: #4CAF50;
-            color: white;
-        }
-        
-        .view-lease-btn:hover {
-            background-color: #45a049;
-        }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-        }
-
-        /* Top Navigation */
-        .top-nav {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-            padding: 0 2rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-/* Add this to your existing CSS */
-/* Improved spacing for templates and content */
-
-/* General content spacing */
-.modal-body,
-.tenant-details,
-.tenant-property {
-    line-height: 1.8;
-}
-
-/* Paragraph spacing in templates */
-.template-preview p,
-.template-preview li,
-.terms-content p {
-    margin-bottom: 1.2rem;
-}
-
-/* Headings in templates */
-.template-preview h4 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.8rem;
-    font-size: 1.1rem;
-}
-
-/* List items in templates */
-.template-preview ul {
-    margin-bottom: 1.5rem;
-    padding-left: 1.5rem;
-}
-
-.template-preview li {
-    margin-bottom: 0.5rem;
-}
-
-/* Form group spacing */
-.form-group {
-    margin-bottom: 1.8rem;
-}
-
-/* Signature section spacing */
-.signature-line {
-    margin-top: 3rem;
-    padding-top: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.signature-block {
-    margin-bottom: 1rem;
-}
-
-/* Tenant details spacing */
-.detail-row {
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-/* Property section spacing */
-.tenant-property {
-    padding: 1.5rem;
+/* Page Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 2rem;
-}
-/* Add to your CSS */
-.signature-guide {
-    position: absolute;
-    bottom: 30%;
-    width: 100%;
-    border-top: 1px dashed #ccc;
-    pointer-events: none;
-    color: #999;
-    text-align: center;
-    font-size: 12px;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
 }
 
-.signature-pad-wrapper {
-    position: relative;
-}
-
-/* Make the signature pad more visible */
-#signature-pad {
-    background-color: #fff;
-    border: 1px solid #ddd;
-    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
-}
-/* Button group spacing */
-.tenant-actions {
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        /* Summernote editor content spacing */
-        .note-editor .note-editable p {
-            margin-bottom: 1.2rem;
-            line-height: 1.8;
-        }
-
-        /* Template preview container */
-        .template-preview {
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            line-height: 1.8;
-        }
-
-        /* Modal content spacing */
-        .modal-body {
-            padding: 2rem;
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            .modal-body {
-                padding: 1.5rem;
-            }
-            
-            .form-group {
-                margin-bottom: 1.5rem;
-            }
-            
-            .tenant-property {
-                padding: 1.2rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .modal-body {
-                padding: 1rem;
-            }
-            
-            .form-group {
-                margin-bottom: 1.2rem;
-            }
-            
-            .template-preview {
-                padding: 1rem;
-            }
-        }
-.signature-space {
-    height: 60px;
-    border-bottom: 1px solid #94a3b8;
-    margin-bottom: 0.5rem;
-}
-
-@media (max-width: 768px) {
-    .placeholder-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .signature-line {
-        flex-direction: column;
-    }
-    
-    .signature-block {
-        width: 100%;
-        margin-bottom: 1.5rem;
-    }
-}
-   /* Add styles for termination modal */
-        .termination-reason {
-            margin-top: 1rem;
-        }
-        
-        .termination-reason textarea {
-            min-height: 100px;
-        }
-        .header-buttons {
+.header-buttons {
     display: flex;
     gap: 1rem;
 }
 
-/* Style for terminated leases button */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
 .btn-terminated {
     background-color: #6b7280;
     color: white;
@@ -1169,6 +533,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
 .btn-terminated:hover {
     background-color: #4b5563;
 }
+
 /* Table Styles */
 .tenant-table-container {
     overflow-x: auto;
@@ -1253,13 +618,407 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     font-size: 0.8rem;
 }
 
-/* Responsive table */
+/* Status styles */
+.lease-status {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-draft {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-signed,
+.status-active {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-pending {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #94a3b8;
+}
+
+.modal-body {
+    padding: 2rem;
+    line-height: 1.8;
+}
+
+.form-group {
+    margin-bottom: 1.8rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+textarea.form-control {
+    min-height: 200px;
+    resize: vertical;
+}
+
+/* Template Styles */
+.template-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.template-section h5 {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.placeholder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.placeholder-item {
+    background: #f8fafc;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border-left: 3px solid #3b82f6;
+}
+
+.placeholder-name {
+    display: block;
+    font-weight: 600;
+    color: #1e40af;
+    margin-bottom: 0.25rem;
+}
+
+.placeholder-desc {
+    display: block;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.template-preview {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+    line-height: 1.8;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.template-preview h4 {
+    color: #1e293b;
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 0.5rem;
+}
+
+.template-preview ul {
+    margin-bottom: 1.5rem;
+    padding-left: 1.5rem;
+}
+
+.template-preview li {
+    margin-bottom: 0.5rem;
+}
+
+.template-preview p {
+    margin-bottom: 1.2rem;
+}
+
+/* Signature Pad Styles */
+.signature-container {
+    margin: 1.5rem 0;
+}
+
+.signature-pad-wrapper {
+    position: relative;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: white;
+    margin-bottom: 1rem;
+}
+
+#signature-pad {
+    width: 100%;
+    height: 200px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+}
+
+.signature-guide {
+    position: absolute;
+    bottom: 30%;
+    width: 100%;
+    border-top: 1px dashed #ccc;
+    pointer-events: none;
+    color: #999;
+    text-align: center;
+    font-size: 12px;
+}
+
+.signature-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.signature-preview {
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.signature-preview img {
+    max-width: 200px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+}
+
+.signature-instructions {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: #f0f9ff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 4px;
+}
+
+/* Summernote editor styling */
+.note-editor {
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    overflow: hidden;
+}
+
+.note-editor .note-toolbar {
+    background: #f1f5f9;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+.note-editor .note-editable p {
+    margin-bottom: 1.2rem;
+    line-height: 1.8;
+}
+
+/* Alerts */
+.alert {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.alert-success {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.alert-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.alert i {
+    font-size: 1.25rem;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: #1e293b;
+}
+
+.empty-state p {
+    color: #64748b;
+    margin-bottom: 1.5rem;
+}
+
+/* Badge styles */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: #3b82f6;
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 12px;
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+/* View lease button */
+.view-lease-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.view-lease-btn:hover {
+    background-color: #45a049;
+}
+
+/* Termination modal styles */
+.termination-reason {
+    margin-top: 1rem;
+}
+
+.termination-reason textarea {
+    min-height: 100px;
+}
+
+/* Detail row spacing */
+.detail-row {
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-label {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.detail-value {
+    color: #1e293b;
+    font-weight: 500;
+    text-align: right;
+}
+
+/* Tenant property section */
+.tenant-property {
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.tenant-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.signature-space {
+    height: 60px;
+    border-bottom: 1px solid #94a3b8;
+    margin-bottom: 0.5rem;
+}
+
+.signature-line {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.signature-block {
+    margin-bottom: 1rem;
+}
+
+/* Responsive Design */
 @media (max-width: 1200px) {
     .tenant-table th:nth-child(5),
     .tenant-table td:nth-child(5),
     .tenant-table th:nth-child(6),
     .tenant-table td:nth-child(6) {
         display: none;
+    }
+
+    .placeholder-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -1272,7 +1031,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     }
 }
 
+@media (max-width: 900px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 280px;
+    }
+    
+    .sidebar.active {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .mobile-menu-btn {
+        display: block;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .header-buttons {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
 @media (max-width: 768px) {
+    .main-content {
+        padding: 1rem;
+    }
+
     .tenant-table th:nth-child(3),
     .tenant-table td:nth-child(3) {
         display: none;
@@ -1291,42 +1085,143 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     .table-actions .btn {
         width: 100%;
     }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .tenant-property {
+        padding: 1.2rem;
+    }
+
+    .signature-line {
+        flex-direction: column;
+    }
+    
+    .signature-block {
+        width: 100%;
+        margin-bottom: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.2rem;
+    }
+    
+    .template-preview {
+        padding: 1rem;
+    }
+
+    .page-title {
+        font-size: 1.5rem;
+    }
+
+    .header-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .tenant-actions {
+        flex-direction: column;
+    }
+
+    .signature-actions {
+        flex-direction: column;
+    }
 }
     </style>
 </head>
 <body>
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <div class="logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
-            </div>
-            
-            <ul class="nav-menu">
-                <li><a href="landlord_dashboard.php">Dashboard</a></li>
-                <li><a href="my_properties.php">My Properties</a></li>
-                <li><a href="applications.php">Applications</a></li>
-                <li><a href="add_property.php">Add Property</a></li>
-                <li><a href="maintenance.php">Maintenance</a></li>
-                <li><a href="tenants.php" class="active">Tenants</a></li>
-                <li><a href="reports.php">Reports</a></li>
-            </ul>
-            
-            <div class="user-profile">
-                <span>Welcome, <?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></span>
-                <div class="profile-avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
-                </div>
-                <a href="../auth/logout.php" style="color: white; margin-left: 1rem;">
-                    <i class="fas fa-sign-out-alt"></i>
-                </a>
-            </div>
+   <!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">
+            <i class="fas fa-home"></i>
+            Easy Rent
         </div>
-    </nav>
+    </div>
+    
+    <div class="sidebar-user">
+        <div class="user-avatar">
+            <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
+        </div>
+        <div class="user-info">
+            <div class="user-name"><?php echo $_SESSION['user_name'] ?? 'Landlord'; ?></div>
+            <div class="user-role">Landlord</div>
+        </div>
+    </div>
+    
+    <ul class="sidebar-nav">
+        <li class="nav-item">
+            <a href="landlord_dashboard.php" class="nav-link">
+                <i class="fas fa-th-large"></i>
+                <span>Dashboard</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="my_properties.php" class="nav-link">
+                <i class="fas fa-building"></i>
+                <span>My Properties</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="applications.php" class="nav-link">
+                <i class="fas fa-file-alt"></i>
+                <span>Applications</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="add_property.php" class="nav-link">
+                <i class="fas fa-plus-circle"></i>
+                <span>Add Property</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="maintenance.php" class="nav-link">
+                <i class="fas fa-tools"></i>
+                <span>Maintenance</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="tenants.php" class="nav-link active">
+                <i class="fas fa-users"></i>
+                <span>Tenants</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="reports.php" class="nav-link">
+                <i class="fas fa-chart-line"></i>
+                <span>Reports</span>
+            </a>
+        </li>
+        <li class="nav-item logout-link">
+            <a href="../auth/logout.php" class="nav-link" id="logoutLink">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </li>
+    </ul>
+</aside>
 
     <!-- Main Content -->
     <div class="main-content">
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <button class="mobile-menu-btn">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="page-title">Approved Tenants</h1>
+        <div></div>
+    </div>
         <!-- Page Header -->
         <div class="page-header">
     <h1 class="page-title">
@@ -1760,7 +1655,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     </div>
 </div>
 
-    <script>
+   <script>
         // Initialize date pickers
         flatpickr('.datepicker', {
             dateFormat: "Y-m-d",
@@ -1787,45 +1682,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
         }
         
         // Create lease buttons
-       // Create lease buttons
-document.querySelectorAll('.create-lease-btn').forEach(button => {
-    button.addEventListener('click', function() {
-        const tenantName = this.getAttribute('data-tenant-name');
-        const propertyName = this.getAttribute('data-property-name');
-        const applicationId = this.getAttribute('data-application-id');
-        const tenantId = this.getAttribute('data-tenant-id');
-        
-        // Check if tenant already has a draft lease via AJAX
-        fetch('check_draft_lease.php?tenant_id=' + tenantId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.has_draft) {
-                    Swal.fire({
-                        title: 'Draft Exists',
-                        text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
-                        icon: 'warning',
-                        confirmButtonText: 'OK'
-                    });
-                } else {
-                    document.getElementById('tenantName').value = tenantName;
-                    document.getElementById('propertyName').value = propertyName;
-                    document.getElementById('application_id').value = applicationId;
-                    
-                    openModal('createLeaseModal');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                // If there's an error with the check, still allow opening the modal
-                document.getElementById('tenantName').value = tenantName;
-                document.getElementById('propertyName').value = propertyName;
-                document.getElementById('application_id').value = applicationId;
+        document.querySelectorAll('.create-lease-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const tenantName = this.getAttribute('data-tenant-name');
+                const propertyName = this.getAttribute('data-property-name');
+                const applicationId = this.getAttribute('data-application-id');
+                const tenantId = this.getAttribute('data-tenant-id');
                 
-                openModal('createLeaseModal');
+                // Check if tenant already has a draft lease via AJAX
+                fetch('check_draft_lease.php?tenant_id=' + tenantId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.has_draft) {
+                            Swal.fire({
+                                title: 'Draft Exists',
+                                text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
+                                icon: 'warning',
+                                confirmButtonText: 'OK'
+                            });
+                        } else {
+                            document.getElementById('tenantName').value = tenantName;
+                            document.getElementById('propertyName').value = propertyName;
+                            document.getElementById('application_id').value = applicationId;
+                            
+                            openModal('createLeaseModal');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        // If there's an error with the check, still allow opening the modal
+                        document.getElementById('tenantName').value = tenantName;
+                        document.getElementById('propertyName').value = propertyName;
+                        document.getElementById('application_id').value = applicationId;
+                        
+                        openModal('createLeaseModal');
+                    });
             });
-    });
-});
-  // Terminate lease buttons
+        });
+
+        // Terminate lease buttons
         document.querySelectorAll('.terminate-lease-btn').forEach(button => {
             button.addEventListener('click', function() {
                 const leaseId = this.getAttribute('data-lease-id');
@@ -1837,14 +1732,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                 document.getElementById('terminate_property_name').value = propertyName;
                 
                 openModal('terminateLeaseModal');
-            });
-        });
-        
-        // Close modals when clicking close button or outside modal
-        closeButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const modal = this.closest('.modal');
-                closeModal(modal.id);
             });
         });
         
@@ -1881,122 +1768,10 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
         // Signature pad functionality
         document.getElementById('clearSignature').addEventListener('click', function() {
             signaturePad.clear();
-        });
-        
-        document.getElementById('saveSignature').addEventListener('click', function() {
-            if (signaturePad.isEmpty()) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please provide a signature first',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-            
-            const signatureData = signaturePad.toDataURL();
-            document.getElementById('signature').value = signatureData;
-            document.getElementById('signLeaseBtn').disabled = false;
-            
-            Swal.fire({
-                title: 'Signature Saved',
-                text: 'Your signature has been saved. You can now sign the lease.',
-                icon: 'success',
-                confirmButtonText: 'OK'
-            });
-        });
-        
-        // Handle lease form submission
-        document.getElementById('leaseForm').addEventListener('submit', function(e) {
-            const templateId = this.elements['template_id'].value;
-            if (!templateId) {
-                e.preventDefault();
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please select a lease template',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            }
-        });
-        
-        // Initialize Summernote editor for template content
-        $(document).ready(function() {
-            $('#template-content').summernote({
-                height: 300,
-                toolbar: [
-                    ['style', ['bold', 'italic', 'underline', 'clear']],
-                    ['font', ['strikethrough', 'superscript', 'subscript']],
-                    ['fontsize', ['fontsize']],
-                    ['color', ['color']],
-                    ['para', ['ul', 'ol', 'paragraph']],
-                    ['height', ['height']],
-                    ['insert', ['link', 'table', 'hr']],
-                    ['view', ['fullscreen', 'codeview', 'help']]
-                ],
-                placeholder: 'Enter your lease agreement template here...'
-            });
-        });
-        
-        // Handle template form submission
-        document.getElementById('templateForm').addEventListener('submit', function(e) {
-            const templateName = this.elements['template_name'].value.trim();
-            const content = this.elements['content'].value.trim();
-            
-            if (!templateName) {
-                e.preventDefault();
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please enter a template name',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-            
-            if (!content) {
-                e.preventDefault();
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please enter template content',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-        });
-
-        // Show success/error messages
-        <?php if (isset($success_message)): ?>
-            Swal.fire({
-                icon: 'success',
-                title: 'Success!',
-                text: '<?php echo addslashes($success_message); ?>',
-                timer: 3000,
-                showConfirmButton: false
-            });
-        <?php endif; ?>
-
-        <?php if (isset($error_message)): ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Error!',
-                text: '<?php echo addslashes($error_message); ?>'
-            });
-        <?php endif; ?>
-    </script>
-    <script>
-    
-      
-
-        // Clear signature
-        document.getElementById('clearSignature').addEventListener('click', function() {
-            signaturePad.clear();
             document.getElementById('signaturePreview').style.display = 'none';
             document.getElementById('signLeaseBtn').disabled = true;
         });
-
-        // Save signature
+        
         document.getElementById('saveSignature').addEventListener('click', function() {
             if (signaturePad.isEmpty()) {
                 Swal.fire({
@@ -2023,145 +1798,352 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                 confirmButtonText: 'OK'
             });
         });
+        
+        // Initialize Summernote editor for template content
+        $(document).ready(function() {
+            $('#template-content').summernote({
+                height: 300,
+                toolbar: [
+                    ['style', ['bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['fontsize', ['fontsize']],
+                    ['color', ['color']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['height', ['height']],
+                    ['insert', ['link', 'table', 'hr']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ],
+                placeholder: 'Enter your lease agreement template here...'
+            });
+        });
 
-        // Handle form submission
+        // ENHANCED FORM SUBMISSION HANDLERS WITH CONFIRMATIONS
+
+        // Handle lease template creation with confirmation
+        document.getElementById('templateForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default first
+            
+            const templateName = this.elements['template_name'].value.trim();
+            const content = this.elements['content'].value.trim();
+            
+            // Validation
+            if (!templateName) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Please enter a template name',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+            
+            if (!content) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Please enter template content',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+
+            // Confirmation dialog
+            Swal.fire({
+                title: 'Create Lease Template?',
+                text: `Are you sure you want to create the template "${templateName}"?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, create template',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading
+                    Swal.fire({
+                        title: 'Creating Template',
+                        text: 'Please wait...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submit the form
+                    this.submit();
+                }
+            });
+        });
+
+        // Handle lease agreement creation with confirmation
+        document.getElementById('leaseForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default first
+            
+            const templateId = this.elements['template_id'].value;
+            const tenantName = document.getElementById('tenantName').value;
+            const propertyName = document.getElementById('propertyName').value;
+            const startDate = this.elements['start_date'].value;
+            const endDate = this.elements['end_date'].value;
+            const rentAmount = this.elements['rent_amount'].value;
+            
+            // Validation
+            if (!templateId) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Please select a lease template',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+
+            // Confirmation dialog
+            Swal.fire({
+                title: 'Create Lease Agreement?',
+                html: `
+                    <div style="text-align: left; margin: 1rem 0;">
+                        <p><strong>Tenant:</strong> ${tenantName}</p>
+                        <p><strong>Property:</strong> ${propertyName}</p>
+                        <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
+                        <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
+                    </div>
+                    <p style="margin-top: 1rem;">Are you sure you want to create this lease agreement?</p>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, create lease',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    htmlContainer: 'text-left'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading
+                    Swal.fire({
+                        title: 'Creating Lease Agreement',
+                        text: 'Please wait...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submit the form
+                    this.submit();
+                }
+            });
+        });
+
+        // Handle lease signing with double confirmation
         document.getElementById('signLeaseForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default first
+            
             if (signaturePad.isEmpty()) {
-                e.preventDefault();
                 Swal.fire({
                     title: 'Error',
                     text: 'Please provide a signature before submitting',
                     icon: 'error',
                     confirmButtonText: 'OK'
                 });
+                return;
             }
+
+            // First confirmation - Review
+            Swal.fire({
+                title: 'Review Lease Details',
+                html: `
+                    <div style="text-align: left; margin: 1rem 0;">
+                        <h4 style="margin-bottom: 1rem; color: #1e293b;">Please review the lease details:</h4>
+                        <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                            <p style="margin: 0.5rem 0;"><strong>Action:</strong> Sign and activate lease agreement</p>
+                            <p style="margin: 0.5rem 0;"><strong>Status Change:</strong> Draft → Active</p>
+                            <p style="margin: 0.5rem 0;"><strong>Effect:</strong> Lease becomes legally binding</p>
+                        </div>
+                        <div style="margin: 1rem 0; text-align: center;">
+                            <img src="${signaturePad.toDataURL()}" style="max-width: 200px; border: 1px solid #e5e7eb; border-radius: 4px;" alt="Your signature">
+                            <p style="font-size: 0.9rem; color: #64748b; margin-top: 0.5rem;">Your signature</p>
+                        </div>
+                    </div>
+                `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Continue to final step',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    htmlContainer: 'text-left'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Second confirmation - Final confirmation
+                    Swal.fire({
+                        title: 'Final Confirmation',
+                        html: `
+                            <div style="text-align: center; margin: 1rem 0;">
+                                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; margin-bottom: 1rem; text-align: left;">
+                                    <strong>⚠️ Important:</strong> Once you confirm, this lease agreement will be:
+                                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                                        <li>Legally binding and active</li>
+                                        <li>Digitally signed with your signature</li>
+                                        <li>Available for tenant access</li>
+                                        <li>Cannot be easily reversed</li>
+                                    </ul>
+                                </div>
+                                <p><strong>Are you absolutely sure you want to sign and activate this lease agreement?</strong></p>
+                            </div>
+                        `,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#ef4444',
+                        cancelButtonColor: '#6b7280',
+                        confirmButtonText: 'Yes, sign and activate',
+                        cancelButtonText: 'Cancel',
+                        customClass: {
+                            htmlContainer: 'text-left'
+                        }
+                    }).then((finalResult) => {
+                        if (finalResult.isConfirmed) {
+                            // Show loading
+                            Swal.fire({
+                                title: 'Signing Lease Agreement',
+                                text: 'Processing your signature and activating lease...',
+                                allowOutsideClick: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+                            
+                            // Submit the form
+                            this.submit();
+                        }
+                    });
+                }
+            });
         });
 
-      
+        // Handle terminate lease form submission
+        document.getElementById('terminateLeaseForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default first
+            
+            const tenantName = document.getElementById('terminate_tenant_name').value;
+            const propertyName = document.getElementById('terminate_property_name').value;
+            const terminationDate = this.elements['termination_date'].value;
+            const reason = this.elements['termination_reason'].value.trim();
+            
+            if (!reason) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Please provide a termination reason',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+
+            Swal.fire({
+                title: 'Terminate Lease Agreement?',
+                html: `
+                    <div style="text-align: left; margin: 1rem 0;">
+                        <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 1rem; margin-bottom: 1rem;">
+                            <strong>⚠️ Warning:</strong> This action cannot be undone.
+                        </div>
+                        <p><strong>Tenant:</strong> ${tenantName}</p>
+                        <p><strong>Property:</strong> ${propertyName}</p>
+                        <p><strong>Termination Date:</strong> ${terminationDate}</p>
+                        <p><strong>Reason:</strong> ${reason}</p>
+                    </div>
+                    <p style="margin-top: 1rem;"><strong>Are you sure you want to terminate this lease?</strong></p>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, terminate lease',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    htmlContainer: 'text-left'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading
+                    Swal.fire({
+                        title: 'Terminating Lease',
+                        text: 'Please wait...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submit the form
+                    this.submit();
+                }
+            });
+        });
+
+        // Show success/error messages
+        <?php if (isset($success_message)): ?>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: '<?php echo addslashes($success_message); ?>',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        <?php endif; ?>
+
+        <?php if (isset($error_message)): ?>
+            Swal.fire({
+                icon: 'error',
+                title: 'Error!',
+                text: '<?php echo addslashes($error_message); ?>'
+            });
+        <?php endif; ?>
     </script>
     
-<script>
-// Handle lease form submission
-document.getElementById('leaseForm').addEventListener('submit', function(e) {
-    const templateId = this.elements['template_id'].value;
-    if (!templateId) {
-        e.preventDefault();
-        Swal.fire({
-            title: 'Error',
-            text: 'Please select a lease template',
-            icon: 'error',
-            confirmButtonText: 'OK'
-        });
-    } else {
-        Swal.fire({
-            title: 'Creating Lease',
-            text: 'Please wait...',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
+    <script>
+        // Mobile menu toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+            });
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth < 900 && 
+                sidebar.classList.contains('active') && 
+                !sidebar.contains(e.target) && 
+                !mobileMenuBtn.contains(e.target)) {
+                sidebar.classList.remove('active');
             }
         });
-    }
-});
 
-// Handle sign lease form submission
-document.getElementById('signLeaseForm').addEventListener('submit', function(e) {
-    if (signaturePad.isEmpty()) {
-        e.preventDefault();
-        Swal.fire({
-            title: 'Error',
-            text: 'Please provide a signature before submitting',
-            icon: 'error',
-            confirmButtonText: 'OK'
+        // Logout confirmation
+        document.getElementById('logoutLink')?.addEventListener('click', function(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'You will be logged out from your account.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, log out',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
         });
-    } else {
-        Swal.fire({
-            title: 'Signing Lease',
-            text: 'Please wait...',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-    }
-});
-
-// Handle template form submission
-document.getElementById('templateForm').addEventListener('submit', function(e) {
-    const templateName = this.elements['template_name'].value.trim();
-    const content = this.elements['content'].value.trim();
-    
-    if (!templateName) {
-        e.preventDefault();
-        Swal.fire({
-            title: 'Error',
-            text: 'Please enter a template name',
-            icon: 'error',
-            confirmButtonText: 'OK'
-        });
-        return;
-    }
-    
-    if (!content) {
-        e.preventDefault();
-        Swal.fire({
-            title: 'Error',
-            text: 'Please enter template content',
-            icon: 'error',
-            confirmButtonText: 'OK'
-        });
-        return;
-    }
-
-    Swal.fire({
-        title: 'Creating Template',
-        text: 'Please wait...',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-});
-
-// Handle terminate lease form submission
-document.getElementById('terminateLeaseForm').addEventListener('submit', function(e) {
-    Swal.fire({
-        title: 'Terminating Lease',
-        text: 'Please wait...',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-});
-</script>
-
-<?php if (isset($success_message)): ?>
-<script>
-Swal.fire({
-    icon: 'success',
-    title: 'Success!',
-    text: '<?php echo addslashes($success_message); ?>',
-    timer: 3000,
-    showConfirmButton: false
-});
-// .then(() => {
-//     // Disabled page reload after success
-//     // window.location.reload();
-// });
-</script>
-<?php endif; ?>
-
-<?php if (isset($error_message)): ?>
-<script>
-Swal.fire({
-    icon: 'error',
-    title: 'Error!',
-    text: '<?php echo addslashes($error_message); ?>'
-});
-</script>
-<?php endif; ?>
-
+    </script>
 
 </body>
 </html>

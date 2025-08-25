@@ -692,7 +692,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
             <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
-            <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            <li><a href="#" onclick="confirmLogout(event)"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
 
@@ -1010,9 +1010,54 @@ function removeOverlay() {
                 });
             });
         });
+function confirmLogout(event) {
+    event.preventDefault();
+    
+    Swal.fire({
+        title: 'Are you sure?',
+        text: "You will be logged out of your account",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, logout!',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = '../auth/logout.php';
+        }
+    });
+}
+<!-- Add these to your head section -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
+<!-- Add this script at the end of your body -->
+<script>
+  // Logout confirmation function
+  function confirmLogout(event) {
+    event.preventDefault();
+    
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "You will be logged out of your account",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, logout!',
+      cancelButtonText: 'Cancel'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        window.location.href = '../auth/logout.php';
+      }
+    });
+  }
+</script>
         
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 </body>
 </html>
 
