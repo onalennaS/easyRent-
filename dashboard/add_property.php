@@ -17,6 +17,42 @@ if (!$conn) {
 // Get landlord ID from session
 $landlord_id = $_SESSION['user_id'] ?? 1; // Fallback for testing
 
+// Function to check if profile is complete (from profile_landlord.php)
+function isProfileComplete($conn, $landlord_id) {
+    $query = "SELECT * FROM landlord_profiles WHERE landlord_id = $landlord_id";
+    $result = mysqli_query($conn, $query);
+    
+    if (!$result || mysqli_num_rows($result) == 0) {
+        return false;
+    }
+    
+    $profile = mysqli_fetch_assoc($result);
+    
+    $required_fields = ['full_name', 'email', 'phone', 'address', 'city', 'province', 'postal_code', 'id_number', 'bank_name', 'account_number', 'branch_code', 'account_holder'];
+    
+    foreach ($required_fields as $field) {
+        if (empty($profile[$field])) {
+            return false;
+        }
+    }
+    
+    // Check for at least one required document
+    $doc_query = "SELECT COUNT(*) as doc_count FROM landlord_documents WHERE landlord_id = $landlord_id";
+    $doc_result = mysqli_query($conn, $doc_query);
+    
+    if (!$doc_result) {
+        return false;
+    }
+    
+    $doc_row = mysqli_fetch_assoc($doc_result);
+    $doc_count = $doc_row ? $doc_row['doc_count'] : 0;
+    
+    return $doc_count > 0;
+}
+
+// Check if profile is complete
+$is_profile_complete = isProfileComplete($conn, $landlord_id);
+
 $success_message = '';
 $error_message = '';
 
@@ -26,8 +62,8 @@ if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Handle form submission only if profile is complete
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_profile_complete) {
     // Validate and sanitize inputs
     $title = mysqli_real_escape_string($conn, trim($_POST['title']));
     $description = mysqli_real_escape_string($conn, trim($_POST['description']));
@@ -127,6 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_message = "Error preparing statement: " . mysqli_error($conn);
         }
     }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_profile_complete) {
+    $error_message = "Please complete your profile before adding properties.";
 }
 
 // Image upload function
@@ -624,6 +662,29 @@ if (!empty($selected_amenities)) {
             font-size: 12px;
         }
 
+        .profile-incomplete {
+            background: #fffbeb;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .profile-incomplete h3 {
+            color: #d97706;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .profile-incomplete p {
+            color: #92400e;
+            margin-bottom: 1rem;
+        }
+
         /* Responsive Design */
         @media (max-width: 900px) {
             .sidebar {
@@ -707,6 +768,12 @@ if (!empty($selected_amenities)) {
         </div>
         
         <ul class="sidebar-nav">
+              <li class="nav-item">
+        <a href="profile_landlord.php" class="nav-link">
+            <i class="fas fa-user"></i>
+            <span>Profile</span>
+        </a>
+    </li>
             <li class="nav-item">
                 <a href="landlord_dashboard.php" class="nav-link">
                     <i class="fas fa-th-large"></i>
@@ -780,18 +847,23 @@ if (!empty($selected_amenities)) {
             </div>
         </div>
 
-        <!-- Alert Messages -->
-        <?php if ($success_message): ?>
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle"></i>
-                <?php echo $success_message; ?>
-            </div>
-        <?php endif; ?>
+<!-- Alert Messages -->
+<?php if ($error_message): ?>
+    <div class="alert alert-error">
+        <i class="fas fa-exclamation-circle"></i>
+        <?php echo $error_message; ?>
+    </div>
+<?php endif; ?>
 
-        <?php if ($error_message): ?>
-            <div class="alert alert-error">
-                <i class="fas fa-exclamation-circle"></i>
-                <?php echo $error_message; ?>
+        <!-- Profile Incomplete Warning -->
+        <?php if (!$is_profile_complete): ?>
+            <div class="profile-incomplete">
+                <h3><i class="fas fa-exclamation-triangle"></i> Profile Incomplete</h3>
+                <p>You need to complete your landlord profile before you can add properties.</p>
+                <a href="profile_landlord.php" class="btn btn-primary">
+                    <i class="fas fa-user"></i>
+                    Complete Your Profile
+                </a>
             </div>
         <?php endif; ?>
 
@@ -1259,10 +1331,17 @@ if (!empty($selected_amenities)) {
                         <i class="fas fa-times"></i>
                         Cancel
                     </a>
-                    <button type="button" class="btn btn-primary" id="submitBtn">
-                        <i class="fas fa-plus"></i>
-                        Add Property
-                    </button>
+                    <?php if ($is_profile_complete): ?>
+                        <button type="button" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-plus"></i>
+                            Add Property
+                        </button>
+                    <?php else: ?>
+                        <button type="button" class="btn btn-primary" id="disabledBtn" disabled style="opacity: 0.6; cursor: not-allowed;">
+                            <i class="fas fa-plus"></i>
+                            Complete Profile to Add Property
+                        </button>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -1333,7 +1412,7 @@ if (!empty($selected_amenities)) {
         }
 
         // Form submission with Sweet Alert confirmation and validation
-        document.getElementById('submitBtn').addEventListener('click', function(e) {
+        document.getElementById('submitBtn')?.addEventListener('click', function(e) {
             e.preventDefault();
             
             // Form validation
@@ -1443,6 +1522,25 @@ if (!empty($selected_amenities)) {
                 }
             });
         });
+        // Check for success parameter in URL and show SweetAlert
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === '1') {
+        Swal.fire({
+            title: 'Success!',
+            text: 'Property added successfully! It will be available after admin approval.',
+            icon: 'success',
+            confirmButtonColor: '#3085d6',
+            confirmButtonText: 'OK'
+        }).then((result) => {
+            // Remove the success parameter from URL to prevent showing the alert again on refresh
+            if (window.history.replaceState) {
+                const newUrl = window.location.protocol + "//" + window.location.host + 
+                              window.location.pathname;
+                window.history.replaceState({path: newUrl}, '', newUrl);
+            }
+        });
+    }
 
         // Logout confirmation
         document.getElementById('logoutLink').addEventListener('click', function(e) {
@@ -1475,6 +1573,39 @@ if (!empty($selected_amenities)) {
             }
         `;
         document.head.appendChild(style);
+
+        // Show profile incomplete alert on page load if profile is not complete
+        <?php if (!$is_profile_complete): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                title: 'Profile Incomplete',
+                html: `
+                    <div style="text-align: left;">
+                        <p style="margin-bottom: 15px; color: #666;">You need to complete your landlord profile before you can add properties.</p>
+                        <ul style="margin-left: 20px; color: #e74c3c; font-weight: 500;">
+                            <li>Complete all required personal information</li>
+                            <li>Provide banking details</li>
+                            <li>Upload required documents</li>
+                        </ul>
+                        <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                            <i class="fas fa-info-circle"></i> 
+                            Click the button below to complete your profile.
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'Complete Profile Now',
+                showCancelButton: true,
+                cancelButtonText: 'Later'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = 'profile_landlord.php';
+                }
+            });
+        });
+        
+        <?php endif; ?>
     </script>
 </body>
 </html>

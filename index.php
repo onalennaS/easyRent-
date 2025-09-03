@@ -647,18 +647,9 @@ if ($isLoggedIn) {
                 </div>
                 
                 <!-- Dashboard Link -->
-                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="mobile-nav-item" onclick="closeMobileNav()">
-                    <i class="fas fa-tachometer-alt mr-3"></i>
-                    <?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
-                </a>
                 
-                <a href="profile.php" class="mobile-nav-item" onclick="closeMobileNav()">
-                    <i class="fas fa-user mr-3"></i>Profile
-                </a>
                 
-                <a href="settings.php" class="mobile-nav-item" onclick="closeMobileNav()">
-                    <i class="fas fa-cog mr-3"></i>Settings
-                </a>
+               
                 
                 <a href="#" onclick="confirmLogout(); return false;" class="mobile-nav-item text-red-600 hover:bg-red-50">
                     <i class="fas fa-sign-out-alt mr-3"></i>Logout
@@ -696,7 +687,7 @@ if ($isLoggedIn) {
                 <a href="#properties" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Properties</a>
                 <a href="#about" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">About</a>
                 <a href="#contact" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Contact</a>
-                <a href="profile.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Profile</a>
+                
                 
                 <!-- Show Dashboard link when logged in -->
                 <?php if($isLoggedIn): ?>
@@ -705,45 +696,31 @@ if ($isLoggedIn) {
                 </a>
                 <?php endif; ?>
             </div>
-
             <!-- Desktop User Section -->
-            <div class="hidden md:flex items-center space-x-4">
-                <?php if(!$isLoggedIn): ?>
-                <!-- Guest Links -->
-                <div class="flex items-center space-x-4">
-                    <a href="auth/login.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                        <i class="fas fa-sign-in-alt mr-2"></i>Login
-                    </a>
-                    <a href="auth/register.php" class="btn-primary px-4 py-2 rounded-lg text-white font-semibold">
-                        <i class="fas fa-user-plus mr-2"></i>Register
-                    </a>
-                </div>
-                <?php else: ?>
-                <!-- Logged In User Dropdown -->
-                <div class="user-dropdown">
-                    <button onclick="toggleUserDropdown()" class="flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                        <i class="fas fa-user-circle text-2xl"></i>
-                        <span><?php echo htmlspecialchars($username); ?></span>
-                        <i class="fas fa-chevron-down text-sm"></i>
-                    </button>
-                    <div id="userDropdown" class="dropdown-content">
-                        <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>">
-                            <i class="fas fa-tachometer-alt"></i>Dashboard
-                        </a>
-                        <a href="profile.php">
-                            <i class="fas fa-user"></i>Profile
-                        </a>
-                        <a href="settings.php">
-                            <i class="fas fa-cog"></i>Settings
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <a href="#" onclick="confirmLogout(); return false;">
-                            <i class="fas fa-sign-out-alt"></i>Logout
-                        </a>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
+<div class="hidden md:flex items-center space-x-4">
+    <?php if(!$isLoggedIn): ?>
+    <!-- Guest Links -->
+    <div class="flex items-center space-x-4">
+        <a href="auth/login.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+            <i class="fas fa-sign-in-alt mr-2"></i>Login
+        </a>
+        <a href="auth/register.php" class="btn-primary px-4 py-2 rounded-lg text-white font-semibold">
+            <i class="fas fa-user-plus mr-2"></i>Register
+        </a>
+    </div>
+    <?php else: ?>
+    <!-- Logged In Links -->
+    <div class="flex items-center space-x-4">
+       
+<a href="#" class="text-gray-700 hover:text-blue-600 transition-colors font-medium" 
+   onclick="confirmLogout(); return false;">
+    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+</a>
+    </div>
+    <?php endif; ?>
+</div>
+
+
 
             <!-- Mobile Menu Button - Moved outside desktop-only section -->
             <div class="md:hidden flex items-center">
@@ -941,23 +918,7 @@ if ($isLoggedIn) {
     document.addEventListener('DOMContentLoaded', function() {
         initializeNavigation();
         
-        <?php if ($showProfileAlert): ?>
-        // Show profile completion alert with colored styling
-        Swal.fire({
-            title: 'Complete Your Profile',
-            html: `Your profile information is incomplete.<br><br>
-                   Please complete your profile to access all features and ensure the best experience.<br><br>
-                   <a href="settings.php" class="text-blue-500 underline font-medium">Click here to complete your profile</a>`,
-            icon: 'info',
-            confirmButtonText: 'OK',
-            customClass: {
-                popup: 'swal2-info',
-                confirmButton: 'swal2-confirm'
-            },
-            buttonsStyling: false,
-            allowOutsideClick: false
-        });
-        <?php endif; ?>
+
     });
 
     function initializeNavigation() {
@@ -1041,26 +1002,22 @@ if ($isLoggedIn) {
     }
 
     // Logout Confirmation
-    function confirmLogout() {
-        Swal.fire({
-            title: 'Logout?',
-            text: 'Are you sure you want to logout?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, logout',
-            cancelButtonText: 'Cancel',
-            customClass: {
-                popup: 'swal2-info',
-                confirmButton: 'swal2-confirm',
-                cancelButton: 'btn-secondary'
-            },
-            buttonsStyling: false
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = 'auth/logout.php';
-            }
-        });
-    }
+function confirmLogout() {
+    Swal.fire({
+        title: 'Are you sure?',
+        text: 'You will be logged out from your account.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, log out',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = 'auth/logout.php';
+        }
+    });
+}
 
     // Property Filter Functions
     function setupFilterEventListeners() {

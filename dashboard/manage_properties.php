@@ -14,6 +14,14 @@ if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
+// Add rejection_reason column if it doesn't exist
+$check_column = "SHOW COLUMNS FROM landlord_documents LIKE 'rejection_reason'";
+$result = mysqli_query($conn, $check_column);
+if (mysqli_num_rows($result) == 0) {
+    $alter_table = "ALTER TABLE landlord_documents ADD COLUMN rejection_reason TEXT NULL AFTER approval_status";
+    mysqli_query($conn, $alter_table);
+}
+
 $success_message = '';
 $error_message = '';
 
@@ -136,13 +144,14 @@ if (!in_array($sort, $allowed_sorts)) {
 
 $order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
 
-// Get properties with landlord information
+// Get properties with landlord information and document count
 $query = "
     SELECT p.*, 
            CONCAT(u.first_name, ' ', u.last_name) as landlord_name,
            u.email as landlord_email,
            u.phone as landlord_phone,
-           (SELECT image_url FROM property_images WHERE property_id = p.id AND is_primary = 1 LIMIT 1) as main_image
+           (SELECT image_url FROM property_images WHERE property_id = p.id AND is_primary = 1 LIMIT 1) as main_image,
+           (SELECT COUNT(*) FROM landlord_documents WHERE landlord_id = p.landlord_id) as document_count
     FROM properties p
     LEFT JOIN users u ON p.landlord_id = u.id
     $where_clause
@@ -180,685 +189,1077 @@ $stats = mysqli_fetch_assoc($stats_result);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Properties - Easy Rent Admin</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         
 
-        :root {
-            --primary-color: #7c3aed;
-            --primary-dark: #6d28d9;
-            --secondary-color: #a855f7;
-            --accent-color: #ec4899;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --light-bg: #f8fafc;
-            --dark-text: #1e293b;
-            --gray-text: #64748b;
-            --card-bg: #ffffff;
-            --border-color: #e5e7eb;
-            --sidebar-bg: #1e293b;
-            --sidebar-active: #334155;
-            --sidebar-text: #cbd5e1;
-        }
-
-           * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 250px;
-            height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px 0;
-            z-index: 1000;
-        }
-
-        .sidebar .logo {
-            text-align: center;
-            padding: 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 30px;
-        }
-
-        .sidebar .logo h2 {
-            font-size: 24px;
-            font-weight: bold;
-        }
-
-        .sidebar ul {
-            list-style: none;
-        }
-
-        .sidebar ul li {
-            margin: 5px 0;
-        }
-
-        .sidebar ul li a {
-            display: block;
-            padding: 15px 25px;
-            color: white;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            border-left: 3px solid transparent;
-        }
-
-        .sidebar ul li a:hover,
-        .sidebar ul li a.active {
-            background-color: rgba(255,255,255,0.1);
-            border-left-color: #fff;
-        }
-
-        .sidebar ul li a i {
-            margin-right: 10px;
-            width: 20px;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            padding: 2rem;
-            margin-left: 250px;
-            max-width: calc(100% - 250px);
-        }
-
-        /* Top Bar */
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .page-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .search-bar {
-            display: flex;
-            gap: 0.75rem;
-        }
-
-        .search-bar input {
-            padding: 0.75rem 1rem;
-            border: 2px solid var(--border-color);
-            border-radius: 10px;
-            font-size: 1rem;
-            min-width: 300px;
-        }
-
-        .search-bar button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 0 1.5rem;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .search-bar button:hover {
-            background: var(--primary-dark);
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border: 1px solid var(--border-color);
-            transition: transform 0.3s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 6px 25px rgba(0,0,0,0.1);
-        }
-
-        .stat-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .stat-icon.primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
-        .stat-icon.success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
-        .stat-icon.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-        .stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--dark-text);
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-label {
-            color: var(--gray-text);
-            font-size: 0.9rem;
-        }
-
-        /* Filters */
-        .filters-container {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border: 1px solid var(--border-color);
-            margin-bottom: 2rem;
-        }
-
-        .filters-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .filter-label {
-            font-weight: 600;
-            color: var(--dark-text);
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-
-        .filter-select,
-        .filter-input {
-            padding: 0.75rem 1rem;
-            border: 2px solid var(--border-color);
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: white;
-        }
-
-        .filter-select:focus,
-        .filter-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
-        }
-
-        .filter-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        /* Alert Messages */
-        .alert {
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-weight: 500;
-        }
-
-        .alert-success {
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        /* Properties Table */
-        .properties-container {
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-        }
-
-        .properties-header {
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .properties-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--dark-text);
-        }
-
-        .properties-count {
-            color: var(--gray-text);
-            font-size: 0.9rem;
-        }
-
-        .table-container {
-            overflow-x: auto;
-        }
-
-        .properties-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .properties-table th,
-        .properties-table td {
-            padding: 1rem 1.5rem;
-            text-align: left;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
-        }
-
-        .properties-table th {
-            background: #f8fafc;
-            font-weight: 600;
-            color: #374151;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        .properties-table th a {
-            color: #374151;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .properties-table th a:hover {
-            color: var(--primary-color);
-        }
-
-        .properties-table tbody tr:hover {
-            background: #f8fafc;
-        }
-
-        /* Property Card (for mobile) */
-        .property-card {
-            display: none;
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border: 1px solid var(--border-color);
-        }
-
-        .property-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 1rem;
-        }
-
-        .property-title {
-            font-weight: 600;
-            color: var(--dark-text);
-            margin-bottom: 0.25rem;
-        }
-
-        .property-location {
-            color: var(--gray-text);
-            font-size: 0.9rem;
-        }
-
-        .property-details {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-
-        .property-detail {
-            font-size: 0.9rem;
-        }
-
-        .property-detail strong {
-            color: var(--dark-text);
-        }
-
-        /* Status Badges */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-badge.approved {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .status-badge.pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-badge.available {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .status-badge.unavailable {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .status-badge.featured {
-            background: #f3e8ff;
-            color: #7c2d12;
-        }
-
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            border: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .btn-sm {
-            padding: 0.375rem 0.75rem;
-            font-size: 0.8rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #9b4af9 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
-            color: white;
-        }
-
-        .btn-success:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
-            color: white;
-        }
-
-        .btn-warning:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-secondary {
-            background: #f8fafc;
-            color: #64748b;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-secondary:hover {
-            background: #f1f5f9;
-            color: #475569;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .properties-table {
-                display: none;
-            }
-            
-            .property-card {
-                display: block;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 70px;
-                overflow: hidden;
-            }
-            
-            .sidebar .logo span,
-            .sidebar .nav-menu a span,
-            .sidebar .profile-info {
-                display: none;
-            }
-            
-            .sidebar .logo {
-                justify-content: center;
-                padding: 1rem;
-            }
-            
-            .sidebar .nav-menu a {
-                justify-content: center;
-            }
-            
-            .sidebar .user-profile {
-                justify-content: center;
-                padding: 1rem;
-            }
-            
-            .main-content {
-                margin-left: 70px;
-                max-width: calc(100% - 70px);
-                padding: 1rem;
-            }
-            
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-            
-            .search-bar {
-                width: 100%;
-            }
-            
-            .search-bar input {
-                min-width: 0;
-                flex: 1;
-            }
-            
-            .filters-container {
-                padding: 1.5rem;
-            }
-            
-            .filters-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .filter-actions {
-                flex-direction: column;
-            }
-            
-            .btn {
-                width: 100%;
-                justify-content: center;
-            }
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--gray-text);
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-            color: var(--primary-color);
-        }
-
-        .empty-state h3 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-            color: var(--dark-text);
-        }
-
-        /* Modal styles for confirmation */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 2rem;
-            border-radius: 16px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--dark-text);
-        }
-
-        .close {
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--gray-text);
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 2rem;
-        }
-        
-        .toggle-sidebar {
-            display: none;
-            position: fixed;
-            top: 1rem;
-            left: 1rem;
-            z-index: 1100;
-            background: var(--primary-color);
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-        
-        @media (max-width: 768px) {
-            .toggle-sidebar {
-                display: flex;
-            }
-        }
-
-        .property-image {
-            width: 80px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
-        }
-        
-        .image-placeholder {
-            width: 80px;
-            height: 60px;
-            background: #f8fafc;
-            border: 1px dashed #e5e7eb;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #9ca3af;
-        }
+:root {
+    --primary-color: #7c3aed;
+    --primary-dark: #6d28d9;
+    --secondary-color: #a855f7;
+    --accent-color: #ec4899;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --light-bg: #f8fafc;
+    --dark-text: #1e293b;
+    --gray-text: #64748b;
+    --card-bg: #ffffff;
+    --border-color: #e5e7eb;
+    --sidebar-bg: #1e293b;
+    --sidebar-active: #334155;
+    --sidebar-text: #cbd5e1;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 0;
+    z-index: 1000;
+}
+
+.sidebar .logo {
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    margin-bottom: 30px;
+}
+
+.sidebar .logo h2 {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.sidebar ul {
+    list-style: none;
+}
+
+.sidebar ul li {
+    margin: 5px 0;
+}
+
+.sidebar ul li a {
+    display: block;
+    padding: 15px 25px;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
+}
+
+.sidebar ul li a:hover,
+.sidebar ul li a.active {
+    background-color: rgba(255,255,255,0.1);
+    border-left-color: #fff;
+}
+
+.sidebar ul li a i {
+    margin-right: 10px;
+    width: 20px;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    margin-left: 250px;
+    max-width: calc(100% - 250px);
+}
+
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.search-bar {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.search-bar input {
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 1rem;
+    min-width: 300px;
+}
+
+.search-bar button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 1.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.search-bar button:hover {
+    background: var(--primary-dark);
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-color);
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-icon.primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
+.stat-icon.success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+.stat-icon.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+.stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--dark-text);
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    color: var(--gray-text);
+    font-size: 0.9rem;
+}
+
+/* Filters */
+.filters-container {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    border: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.filter-label {
+    font-weight: 600;
+    color: var(--dark-text);
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.filter-select,
+.filter-input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+/* Alert Messages */
+.alert {
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 500;
+}
+
+.alert-success {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.alert-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Properties Table */
+.properties-container {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    border: 1px solid var(--border-color);
+    overflow: visible;
+}
+
+.properties-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.properties-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--dark-text);
+}
+
+.properties-count {
+    color: var(--gray-text);
+    font-size: 0.8rem;
+}
+
+.table-container {
+    overflow: visible;
+}
+
+.properties-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.properties-table th,
+.properties-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.properties-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #374151;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-size: 0.85rem;
+}
+
+.properties-table th a {
+    color: #374151;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.properties-table th a:hover {
+    color: var(--primary-color);
+}
+
+.properties-table tbody tr {
+    position: relative;
+}
+
+.properties-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* Ensure dropdown has space above table rows */
+.properties-table tbody tr:first-child .dropdown-menu {
+    bottom: auto;
+    top: calc(100% + 8px);
+    transform: translateY(-10px);
+}
+
+.properties-table tbody tr:first-child .dropdown-menu.show {
+    transform: translateY(0);
+}
+
+/* Property Card (for mobile) */
+.property-card {
+    display: none;
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-color);
+}
+
+.property-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.property-title {
+    font-weight: 600;
+    color: var(--dark-text);
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.property-location {
+    color: var(--gray-text);
+    font-size: 0.8rem;
+}
+
+.property-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.property-detail {
+    font-size: 0.9rem;
+}
+
+.property-detail strong {
+    color: var(--dark-text);
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin: 0.1rem;
+}
+
+.status-badge.approved {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-badge.available {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status-badge.unavailable {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-badge.featured {
+    background: #f3e8ff;
+    color: #7c2d12;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Updated Action Dropdown Styles - Always Visible */
+.action-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-toggle {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.2);
+    min-width: 120px;
+    justify-content: center;
+}
+
+.dropdown-toggle:hover {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #9b4af9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
+}
+
+.dropdown-toggle i {
+    font-size: 0.875rem;
+}
+
+.dropdown-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 220px;
+    display: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.dropdown-menu.show {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.875rem 1.25rem;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    color: var(--dark-text);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.dropdown-item:first-child {
+    border-radius: 12px 12px 0 0;
+}
+
+.dropdown-item:last-child {
+    border-radius: 0 0 12px 12px;
+}
+
+.dropdown-item:hover {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    color: var(--primary-color);
+    transform: translateX(4px);
+}
+
+.dropdown-item i {
+    margin-right: 0.75rem;
+    width: 18px;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+    margin: 0.5rem 0;
+}
+
+/* Enhanced Button Styles */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #9b4af9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.3);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+    color: white;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
+    color: white;
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
+    color: white;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    color: #475569;
+    transform: translateY(-2px);
+}
+
+.property-image {
+    width: 60px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.image-placeholder {
+    width: 60px;
+    height: 45px;
+    background: #f8fafc;
+    border: 1px dashed #e5e7eb;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+/* Document Modal Styles - Updated Header to Match Sidebar */
+.document-modal {
+    display: none;
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+}
+
+.document-modal-content {
+    background-color: white;
+    margin: 2% auto;
+    padding: 0;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.document-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 2.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px 20px 0 0;
+}
+
+.document-modal-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.document-modal-title i {
+    font-size: 1.25rem;
+    opacity: 0.9;
+}
+
+.document-close {
+    font-size: 1.75rem;
+    cursor: pointer;
+    color: white;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+    padding: 0.5rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.document-close:hover {
+    opacity: 1;
+    background-color: rgba(255,255,255,0.1);
+    transform: scale(1.1);
+}
+
+.document-modal-body {
+    padding: 2.5rem;
+    overflow-y: auto;
+    max-height: calc(90vh - 140px);
+}
+
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+    margin-top: 1.5rem;
+}
+
+.document-item {
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 2rem;
+    background: linear-gradient(135deg, #fafafa 0%, #f8fafc 100%);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.document-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.document-item:hover {
+    border-color: #667eea;
+    background: white;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+}
+
+.document-item:hover::before {
+    transform: scaleX(1);
+}
+
+.document-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.document-name {
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.document-name i {
+    color: #667eea;
+    font-size: 1.25rem;
+}
+
+.document-info {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.document-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-view {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.btn-view:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn-approve-doc {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.btn-approve-doc:hover {
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+}
+
+.btn-reject-doc {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.btn-reject-doc:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+}
+
+.no-documents {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6b7280;
+}
+
+.no-documents i {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.5;
+    color: #9ca3af;
+}
+
+.no-documents h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--dark-text);
+}
+
+/* Rejection reason style */
+.rejection-reason {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    border-left: 4px solid #ef4444;
+}
+
+.rejection-reason strong {
+    color: #7f1d1d;
+}
+
+/* Modal styles for confirmation */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 15% auto;
+    padding: 2rem;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--dark-text);
+}
+
+.close {
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--gray-text);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+.toggle-sidebar {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1100;
+    background: var(--primary-color);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .properties-table {
+        font-size: 0.85rem;
+    }
+    
+    .properties-table th,
+    .properties-table td {
+        padding: 0.75rem 1rem;
+    }
+    
+    .dropdown-menu {
+        min-width: 180px;
+        left: auto;
+        right: 0;
+    }
+}
+
+@media (max-width: 1024px) {
+    .properties-table {
+        display: none;
+    }
+    
+    .property-card {
+        display: block;
+    }
+}
+
+@media (max-width: 768px) {
+    .toggle-sidebar {
+        display: flex;
+    }
+    
+    .sidebar {
+        width: 70px;
+        overflow: hidden;
+    }
+    
+    .sidebar .logo span,
+    .sidebar .nav-menu a span,
+    .sidebar .profile-info {
+        display: none;
+    }
+    
+    .sidebar .logo {
+        justify-content: center;
+        padding: 1rem;
+    }
+    
+    .sidebar .nav-menu a {
+        justify-content: center;
+    }
+    
+    .sidebar .user-profile {
+        justify-content: center;
+        padding: 1rem;
+    }
+    
+    .main-content {
+        margin-left: 70px;
+        max-width: calc(100% - 70px);
+        padding: 1rem;
+    }
+    
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .search-bar {
+        width: 100%;
+    }
+    
+    .search-bar input {
+        min-width: 0;
+        flex: 1;
+    }
+    
+    .filters-container {
+        padding: 1.5rem;
+    }
+    
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .dropdown-menu {
+        right: auto;
+        left: 0;
+        min-width: 200px;
+    }
+    
+    .documents-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .document-modal-body {
+        padding: 1.5rem;
+    }
+    
+    .document-modal-header {
+        padding: 1.5rem 2rem;
+    }
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--gray-text);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+    color: var(--primary-color);
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--dark-text);
+}
     </style>
     
 </head>
@@ -994,7 +1395,7 @@ $stats = mysqli_fetch_assoc($stats_result);
                         <select name="sort" class="filter-select">
                             <option value="created_at" <?php echo $sort === 'created_at' ? 'selected' : ''; ?>>Date Added</option>
                             <option value="title" <?php echo $sort === 'title' ? 'selected' : ''; ?>>Title</option>
-                            <option value="rent_amount" <?php echo $sort === 'rent_amount' ? 'selected' : ''; ?>>Rent Amount</option>
+                            <option value 'rent_amount' <?php echo $sort === 'rent_amount' ? 'selected' : ''; ?>>Rent Amount</option>
                             <option value="city" <?php echo $sort === 'city' ? 'selected' : ''; ?>>City</option>
                             <option value="property_type" <?php echo $sort === 'property_type' ? 'selected' : ''; ?>>Property Type</option>
                             <option value="view_count" <?php echo $sort === 'view_count' ? 'selected' : ''; ?>>View Count</option>
@@ -1091,60 +1492,50 @@ $stats = mysqli_fetch_assoc($stats_result);
                                             <span class="status-badge pending">Pending</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <!-- Approve/Disapprove -->
-                                            <?php if (!$property['admin_approved']): ?>
-                                                <form method="POST" style="display:inline;">
-                                                    <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                    <input type="hidden" name="action" value="approve">
-                                                    <button type="submit" class="btn btn-success btn-sm">
-                                                        <i class="fas fa-check"></i> Approve
+                                   <td>
+                                        <div class="action-dropdown">
+                                            <button class="dropdown-toggle" onclick="toggleDropdown(event, <?php echo $property['id']; ?>)">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                                Actions
+                                            </button>
+                                            <div class="dropdown-menu" id="dropdown-<?php echo $property['id']; ?>">
+                                                <?php if (!$property['admin_approved']): ?>
+                                                    <button class="dropdown-item" onclick="submitAction(<?php echo $property['id']; ?>, 'approve')">
+                                                        <i class="fas fa-check" style="color: #10b981;"></i> Approve
                                                     </button>
-                                                </form>
-                                            <?php else: ?>
-                                                <form method="POST" style="display:inline;">
-                                                    <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                    <input type="hidden" name="action" value="disapprove">
-                                                    <button type="submit" class="btn btn-warning btn-sm">
-                                                        <i class="fas fa-ban"></i> Disapprove
+                                                <?php else: ?>
+                                                    <button class="dropdown-item" onclick="submitAction(<?php echo $property['id']; ?>, 'disapprove')">
+                                                        <i class="fas fa-ban" style="color: #f59e0b;"></i> Disapprove
                                                     </button>
-                                                </form>
-                                            <?php endif; ?>
-                                            
-                                            <!-- Toggle Availability -->
-                                            <form method="POST" style="display:inline;">
-                                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                <input type="hidden" name="action" value="toggle_availability">
-                                                <button type="submit" class="btn btn-secondary btn-sm">
-                                                    <i class="fas fa-sync"></i> 
+                                                <?php endif; ?>
+                                                
+                                                <button class="dropdown-item" onclick="submitAction(<?php echo $property['id']; ?>, 'toggle_availability')">
+                                                    <i class="fas fa-sync" style="color: #64748b;"></i> 
                                                     <?php echo $property['is_available'] ? 'Make Unavailable' : 'Make Available'; ?>
                                                 </button>
-                                            </form>
-                                            
-                                            <!-- Toggle Featured -->
-                                            <form method="POST" style="display:inline;">
-                                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                <input type="hidden" name="action" value="toggle_featured">
-                                                <button type="submit" class="btn btn-primary btn-sm">
-                                                    <i class="fas fa-star"></i> 
+                                                
+                                                <button class="dropdown-item" onclick="submitAction(<?php echo $property['id']; ?>, 'toggle_featured')">
+                                                    <i class="fas fa-star" style="color: #7c3aed;"></i> 
                                                     <?php echo $property['is_featured'] ? 'Unfeature' : 'Feature'; ?>
                                                 </button>
-                                            </form>
-                                            
-                                            <!-- Delete -->
-                                            <form method="POST" style="display:inline;" onsubmit="return confirmDelete();">
-                                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                <input type="hidden" name="action" value="delete">
-                                                <button type="submit" class="btn btn-danger btn-sm">
-                                                    <i class="fas fa-trash"></i> Delete
+                                                
+                                                <div class="dropdown-divider"></div>
+                                                
+                                                <a href="property_images.php?id=<?php echo $property['id']; ?>" 
+                                                   class="dropdown-item" target="_blank" style="text-decoration: none; color: inherit;">
+                                                    <i class="fas fa-images" style="color: #3b82f6;"></i> View Images
+                                                </a>
+                                                
+                                                <button class="dropdown-item" onclick="viewLandlordDocuments(<?php echo $property['landlord_id']; ?>, '<?php echo htmlspecialchars($property['landlord_name']); ?>')">
+                                                    <i class="fas fa-file-alt" style="color: #3b82f6;"></i> Documents (<?php echo $property['document_count'] ?? 0; ?>)
                                                 </button>
-                                            </form>
-                                            <a href="property_images.php?id=<?php echo $property['id']; ?>" 
-                                               class="btn btn-secondary btn-sm"
-                                               target="_blank">
-                                                <i class="fas fa-images"></i> View Images
-                                            </a>
+                                                
+                                                <div class="dropdown-divider"></div>
+                                                
+                                                <button class="dropdown-item" onclick="deleteProperty(<?php echo $property['id']; ?>)">
+                                                    <i class="fas fa-trash" style="color: #ef4444;"></i> Delete
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -1189,50 +1580,35 @@ $stats = mysqli_fetch_assoc($stats_result);
                         </div>
                         
                         <div class="action-buttons">
-                            <?php if (!$property['admin_approved']): ?>
-                                <form method="POST" style="display:inline;">
-                                    <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                    <input type="hidden" name="action" value="approve">
-                                    <button type="submit" class="btn btn-success btn-sm">
-                                        <i class="fas fa-check"></i> Approve
-                                    </button>
-                                </form>
-                            <?php else: ?>
-                                <form method="POST" style="display:inline;">
-                                    <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                    <input type="hidden" name="action" value="disapprove">
-                                    <button type="submit" class="btn btn-warning btn-sm">
-                                        <i class="fas fa-ban"></i> Disapprove
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-                            
-                            <form method="POST" style="display:inline;">
-                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                <input type="hidden" name="action" value="toggle_availability">
-                                <button type="submit" class="btn btn-secondary btn-sm">
-                                    <i class="fas fa-sync"></i> 
-                                    <?php echo $property['is_available'] ? 'Unavailable' : 'Available'; ?>
-                                </button>
-                            </form>
-                            
-                            <form method="POST" style="display:inline;">
-                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                <input type="hidden" name="action" value="toggle_featured">
-                                <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-star"></i> 
-                                    <?php echo $property['is_featured'] ? 'Unfeature' : 'Feature'; ?>
-                                </button>
-                            </form>
-                            
-                            <form method="POST" style="display:inline;" onsubmit="return confirmDelete();">
-                                <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                <input type="hidden" name="action" value="delete">
-                                <button type="submit" class="btn btn-danger btn-sm">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </form>
-                        </div>
+    <?php if (!$property['admin_approved']): ?>
+        <button onclick="submitAction(<?php echo $property['id']; ?>, 'approve')" class="btn btn-success btn-sm">
+            <i class="fas fa-check"></i> Approve
+        </button>
+    <?php else: ?>
+        <button onclick="submitAction(<?php echo $property['id']; ?>, 'disapprove')" class="btn btn-warning btn-sm">
+            <i class="fas fa-ban"></i> Disapprove
+        </button>
+    <?php endif; ?>
+    
+    <button onclick="submitAction(<?php echo $property['id']; ?>, 'toggle_availability')" class="btn btn-secondary btn-sm">
+        <i class="fas fa-sync"></i> 
+        <?php echo $property['is_available'] ? 'Unavailable' : 'Available'; ?>
+    </button>
+    
+    <button onclick="submitAction(<?php echo $property['id']; ?>, 'toggle_featured')" class="btn btn-primary btn-sm">
+        <i class="fas fa-star"></i> 
+        <?php echo $property['is_featured'] ? 'Unfeature' : 'Feature'; ?>
+    </button>
+    
+    <button onclick="deleteProperty(<?php echo $property['id']; ?>)" class="btn btn-danger btn-sm">
+        <i class="fas fa-trash"></i> Delete
+    </button>
+    
+    <button onclick="viewLandlordDocuments(<?php echo $property['landlord_id']; ?>, '<?php echo htmlspecialchars($property['landlord_name']); ?>')" 
+            class="btn btn-secondary btn-sm">
+        <i class="fas fa-file-alt"></i> Documents (<?php echo $property['document_count'] ?? 0; ?>)
+    </button>
+</div>
                     </div>
                 <?php endforeach; ?>
                 
@@ -1245,20 +1621,279 @@ $stats = mysqli_fetch_assoc($stats_result);
             <?php endif; ?>
         </div>
     </div>
-    
-    <!-- Delete Confirmation Script -->
-    <script>
+    <!-- Documents Modal -->
+<div id="documentsModal" class="document-modal">
+    <div class="document-modal-content">
+        <div class="document-modal-header">
+            <h3 class="document-modal-title">
+                <i class="fas fa-file-alt"></i>
+                Landlord Documents
+            </h3>
+            <span class="document-close">&times;</span>
+        </div>
+        <div class="document-modal-body">
+            <div id="documentsContent">
+                <!-- Documents will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+<script>
         function confirmDelete() {
             return confirm("Are you sure you want to delete this property? This action cannot be undone.");
+        }
+        function viewLandlordDocuments(landlordId, landlordName) {
+    const modal = document.getElementById('documentsModal');
+    const content = document.getElementById('documentsContent');
+    const titleElement = document.querySelector('.document-modal-title');
+    
+    // Show modal
+    modal.style.display = 'block';
+    
+    // Update title and store data attributes
+    titleElement.innerHTML = `<i class="fas fa-file-alt"></i> Documents for ${landlordName}`;
+    titleElement.dataset.landlordId = landlordId;
+    titleElement.dataset.landlordName = landlordName;
+    
+    // Show loading
+    content.innerHTML = '<div style="text-align: center; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading documents...</div>';
+    
+    // Fetch documents
+    fetch(`get_landlord_documents.php?landlord_id=${landlordId}`)
+        .then(response => response.text())
+        .then(data => {
+            content.innerHTML = data;
+        })
+        .catch(error => {
+            content.innerHTML = '<div class="no-documents"><i class="fas fa-exclamation-triangle"></i><h3>Error</h3><p>Failed to load documents</p></div>';
+        });
+}
+        
+        // Close modal
+        document.querySelector('.document-close').onclick = function() {
+            document.getElementById('documentsModal').style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('documentsModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
         }
         
         // Toggle sidebar on mobile
         document.querySelector('.toggle-sidebar').addEventListener('click', function() {
             document.querySelector('.sidebar').classList.toggle('open');
         });
+        // Add these functions after your existing confirmDelete function
+function toggleDropdown(event, propertyId) {
+    event.stopPropagation();
+    const dropdown = document.getElementById(`dropdown-${propertyId}`);
+    
+    // Close all other dropdowns
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        if (menu.id !== `dropdown-${propertyId}`) {
+            menu.classList.remove('show');
+        }
+    });
+    
+    dropdown.classList.toggle('show');
+}
+
+function submitAction(propertyId, action) {
+    let title, text, icon, confirmButtonText, confirmButtonColor;
+    
+    switch(action) {
+        case 'approve':
+            title = 'Approve Property';
+            text = 'Are you sure you want to approve this property?';
+            icon = 'question';
+            confirmButtonText = 'Yes, approve it!';
+            confirmButtonColor = '#10b981';
+            break;
+        case 'disapprove':
+            title = 'Disapprove Property';
+            text = 'Are you sure you want to disapprove this property?';
+            icon = 'warning';
+            confirmButtonText = 'Yes, disapprove it!';
+            confirmButtonColor = '#f59e0b';
+            break;
+        case 'toggle_featured':
+            title = 'Update Featured Status';
+            text = 'Are you sure you want to change the featured status of this property?';
+            icon = 'question';
+            confirmButtonText = 'Yes, update it!';
+            confirmButtonColor = '#7c3aed';
+            break;
+        case 'toggle_availability':
+            title = 'Update Availability';
+            text = 'Are you sure you want to change the availability status of this property?';
+            icon = 'question';
+            confirmButtonText = 'Yes, update it!';
+            confirmButtonColor = '#64748b';
+            break;
+        default:
+            return;
+    }
+    
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: icon,
+        showCancelButton: true,
+        confirmButtonColor: confirmButtonColor,
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: confirmButtonText,
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="property_id" value="${propertyId}">
+                <input type="hidden" name="action" value="${action}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+}
+
+function deleteProperty(propertyId) {
+    Swal.fire({
+        title: 'Delete Property',
+        text: 'This action cannot be undone!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, I understand',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Second confirmation for delete
+            Swal.fire({
+                title: 'Final Confirmation',
+                text: 'Are you absolutely sure you want to delete this property? This will permanently remove all associated data.',
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete permanently!',
+                cancelButtonText: 'Cancel'
+            }).then((finalResult) => {
+                if (finalResult.isConfirmed) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.innerHTML = `
+                        <input type="hidden" name="property_id" value="${propertyId}">
+                        <input type="hidden" name="action" value="delete">
+                    `;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+    });
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function() {
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.classList.remove('show');
+    });
+});
+function approveDocument(documentId) {
+    Swal.fire({
+        title: 'Approve Document',
+        text: 'Are you sure you want to approve this document?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, approve it!',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            updateDocumentStatus(documentId, 'approve');
+        }
+    });
+}
+
+function rejectDocument(documentId) {
+    // Use SweetAlert2 to get the rejection reason
+    Swal.fire({
+        title: 'Reason for Rejection',
+        input: 'textarea',
+        inputLabel: 'Please provide the reason for rejecting this document:',
+        inputPlaceholder: 'Type your reason here...',
+        inputAttributes: {
+            'aria-label': 'Type your reason here'
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Reject Document',
+        cancelButtonText: 'Cancel',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'You need to provide a reason for rejection!';
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            updateDocumentStatus(documentId, 'reject', result.value);
+        }
+    });
+}
+
+function updateDocumentStatus(documentId, action, rejectionReason = '') {
+    const formData = new FormData();
+    formData.append('document_id', documentId);
+    formData.append('action', action);
+    
+    if (action === 'reject' && rejectionReason) {
+        formData.append('rejection_reason', rejectionReason);
+    }
+    
+    fetch('update_document_status.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            Swal.fire({
+                title: 'Success!',
+                text: data.message,
+                icon: 'success',
+                confirmButtonColor: '#10b981'
+            });
+            // Refresh the documents in the modal
+            const landlordId = document.querySelector('.document-modal-title').dataset.landlordId;
+            if (landlordId) {
+                viewLandlordDocuments(landlordId, document.querySelector('.document-modal-title').dataset.landlordName);
+            }
+        } else {
+            Swal.fire({
+                title: 'Error!',
+                text: data.message,
+                icon: 'error',
+                confirmButtonColor: '#ef4444'
+            });
+        }
+    })
+    .catch(error => {
+        Swal.fire({
+            title: 'Error!',
+            text: 'An error occurred while updating the document status.',
+            icon: 'error',
+            confirmButtonColor: '#ef4444'
+        });
+        console.error('Error:', error);
+    });
+}
     </script>
 </body>
 </html>
 <?php
 mysqli_close($conn);
-?>

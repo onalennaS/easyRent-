@@ -725,6 +725,12 @@ textarea.form-control {
     </div>
     
     <ul class="sidebar-nav">
+          <li class="nav-item">
+        <a href="profile_landlord.php" class="nav-link">
+            <i class="fas fa-user"></i>
+            <span>Profile</span>
+        </a>
+    </li>
         <li class="nav-item">
             <a href="landlord_dashboard.php" class="nav-link">
                 <i class="fas fa-th-large"></i>
