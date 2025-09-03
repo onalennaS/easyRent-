@@ -65,12 +65,7 @@ $bedrooms = isset($_GET['bedrooms']) && $_GET['bedrooms'] !== '' ? intval($_GET[
 $property_type = isset($_GET['property_type']) ? mysqli_real_escape_string($conn, $_GET['property_type']) : '';
 
 // Build properties query with filters - FIXED LOGIC
-$where_clauses = [];
-
-// Only add status filter if the column exists
-if ($has_status) {
-    $where_clauses[] = "p.status = 'approved'";
-}
+$where_clauses = ["p.admin_approved = 1"];
 
 // Search filter
 if (!empty($search)) {
@@ -192,7 +187,24 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
     <title>Browse Properties - Easy Rent</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS styles remain unchanged */
+        :root {
+            --primary-color: #7c3aed;
+            --primary-dark: #6d28d9;
+            --secondary-color: #a855f7;
+            --accent-color: #ec4899;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --light-bg: #f8fafc;
+            --dark-text: #1e293b;
+            --gray-text: #64748b;
+            --card-bg: #ffffff;
+            --border-color: #e5e7eb;
+            --sidebar-bg: #1e293b;
+            --sidebar-active: #334155;
+            --sidebar-text: #cbd5e1;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -211,11 +223,10 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             top: 0;
             width: 250px;
             height: 100vh;
-            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 20px 0;
             z-index: 1000;
-            transition: transform 0.3s ease;
         }
 
         .sidebar .logo {
@@ -258,184 +269,144 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             width: 20px;
         }
 
+        /* Main Content */
         .main-content {
+            flex: 1;
+            padding: 2rem;
             margin-left: 250px;
-            padding: 20px;
-            min-height: 100vh;
+            max-width: calc(100% - 250px);
         }
 
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+        /* Top Bar */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
         }
 
-        .header h1 {
-            color: #333;
-            font-size: 28px;
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
-        .alert {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: opacity 0.3s ease;
-        }
-
-        .alert-success {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-
-        .alert-error {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-
+        /* Filters */
         .filters-container {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
         }
 
         .filters-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
 
         .filter-group {
-            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .filter-group label {
-            display: block;
-            margin-bottom: 8px;
+        .filter-label {
             font-weight: 600;
-            color: #444;
+            color: var(--dark-text);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
         }
 
-        .filter-group input,
-        .filter-group select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 15px;
-            transition: border-color 0.3s;
+        .filter-select,
+        .filter-input {
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            background: white;
         }
 
-        .filter-group input:focus,
-        .filter-group select:focus {
-            border-color: #4a90e2;
+        .filter-select:focus,
+        .filter-input:focus {
             outline: none;
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
         }
 
         .filter-actions {
             display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            margin-top: 10px;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
         }
 
-        .btn {
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
+        /* Alert Messages */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* Properties Grid */
+        .properties-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+        }
+
+        .properties-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .properties-title {
+            font-size: 1.25rem;
             font-weight: 600;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
+            color: var(--dark-text);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #4a90e2 0%, #2a6fc9 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #3a80d2 0%, #1a5fb9 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(42, 111, 201, 0.25);
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 2px solid #4a90e2;
-            color: #4a90e2;
-        }
-
-        .btn-outline:hover {
-            background-color: rgba(74, 144, 226, 0.1);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: linear-gradient(135deg, #33d96b 0%, #28e9c7 100%);
-        }
-        
-        .btn-disabled {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            color: #155724;
-            cursor: not-allowed;
-            opacity: 0.9;
-        }
-
-        .section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-        }
-
-        .section h2 {
-            color: #333;
-            font-size: 22px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .results-summary {
-            color: #666;
-            font-size: 16px;
+        .properties-count {
+            color: var(--gray-text);
+            font-size: 0.9rem;
         }
 
         .property-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
         }
 
         .property-card {
-            border: 1px solid #eee;
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             overflow: hidden;
             transition: all 0.3s ease;
@@ -459,6 +430,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             font-size: 14px;
             flex-direction: column;
             gap: 10px;
+            overflow: hidden;
         }
 
         .property-image img {
@@ -468,104 +440,149 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
         }
 
         .property-content {
-            padding: 20px;
+            padding: 1.25rem;
         }
 
         .property-card h3 {
-            color: #333;
-            margin-bottom: 12px;
-            font-size: 20px;
+            color: var(--dark-text);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
         }
 
         .property-meta {
             display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            color: #666;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--gray-text);
+            font-size: 0.85rem;
         }
 
         .meta-item {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 14px;
+            gap: 0.35rem;
         }
 
-        .property-card p {
-            color: #666;
-            font-size: 15px;
-            margin-bottom: 8px;
+        .property-description {
+            color: var(--gray-text);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
             line-height: 1.5;
         }
 
         .property-address {
-            margin-bottom: 15px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: var(--gray-text);
         }
 
         .property-price {
-            color: #28a745;
+            color: var(--success-color);
             font-weight: bold;
-            font-size: 22px;
-            margin: 15px 0;
+            font-size: 1.25rem;
+            margin: 0.75rem 0;
         }
 
         .property-footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
-        }
-
-        .landlord-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .landlord-avatar {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
         }
 
         .property-actions {
             display: flex;
-            gap: 10px;
+            gap: 0.5rem;
         }
 
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            justify-content: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #9b4af9 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-disabled {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            color: #155724;
+            cursor: not-allowed;
+            opacity: 0.9;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(124, 58, 237, 0.1);
+        }
+
+        /* No Results */
         .no-results {
             text-align: center;
-            padding: 60px 20px;
-            color: #666;
+            padding: 3rem 2rem;
+            color: var(--gray-text);
+            grid-column: 1 / -1;
         }
 
         .no-results i {
-            font-size: 72px;
-            color: #ddd;
-            margin-bottom: 20px;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+            opacity: 0.5;
         }
 
         .no-results h3 {
-            margin-bottom: 10px;
-            color: #555;
+            margin-bottom: 0.5rem;
+            color: var(--dark-text);
         }
 
+        /* Pagination */
         .pagination {
             display: flex;
             justify-content: center;
-            margin-top: 30px;
-            gap: 8px;
+            margin-top: 2rem;
+            gap: 0.5rem;
         }
 
         .page-item {
@@ -573,23 +590,24 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
         }
 
         .page-link {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            color: #4a90e2;
+            color: var(--primary-color);
             text-decoration: none;
             transition: all 0.3s;
+            font-size: 0.9rem;
         }
 
         .page-link:hover {
             background-color: #f0f7ff;
-            border-color: #4a90e2;
+            border-color: var(--primary-color);
         }
 
         .page-item.active .page-link {
-            background-color: #4a90e2;
+            background-color: var(--primary-color);
             color: white;
-            border-color: #4a90e2;
+            border-color: var(--primary-color);
         }
 
         .page-item.disabled .page-link {
@@ -597,47 +615,66 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             pointer-events: none;
         }
 
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 200px;
-            }
-            
-            .main-content {
-                margin-left: 200px;
-            }
-            
+        @media (max-width: 1024px) {
             .property-grid {
                 grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             }
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 768px) {
             .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
+                width: 70px;
+                overflow: hidden;
             }
             
-            .sidebar.active {
-                transform: translateX(0);
+            .sidebar .logo span,
+            .sidebar .nav-menu a span,
+            .sidebar .profile-info {
+                display: none;
+            }
+            
+            .sidebar .logo {
+                justify-content: center;
+                padding: 1rem;
+            }
+            
+            .sidebar .nav-menu a {
+                justify-content: center;
             }
             
             .main-content {
-                margin-left: 0;
-                padding-top: 70px;
+                margin-left: 70px;
+                max-width: calc(100% - 70px);
+                padding: 1rem;
+            }
+            
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
             }
             
             .filters-grid {
                 grid-template-columns: 1fr;
             }
             
+            .filter-actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            
             .property-grid {
                 grid-template-columns: 1fr;
             }
             
-            .section-header {
+            .properties-header {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 15px;
+                gap: 0.75rem;
             }
         }
     </style>
@@ -661,13 +698,15 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
-    
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Header -->
-        <div class="header">
-            <h1>Find Your Perfect Home</h1>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <h1 class="page-title">
+                <i class="fas fa-building"></i>
+                Browse Properties
+            </h1>
             <div class="tenant-info">
                 <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Tenant'); ?></span>
             </div>
@@ -690,27 +729,26 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             <form method="GET" action="browse_properties.php" id="filter-form">
                 <div class="filters-grid">
                     <div class="filter-group">
-                        <label for="search"><i class="fas fa-search"></i> Search</label>
-                        <input type="text" id="search" name="search" placeholder="Location, keywords..." 
+                        <label class="filter-label"><i class="fas fa-search"></i> Search</label>
+                        <input type="text" name="search" class="filter-input" placeholder="Location, keywords..." 
                                value="<?php echo htmlspecialchars($search); ?>">
                     </div>
                     
                     <div class="filter-group">
-    <label for="min_price"><span class="text-gray-700 font-medium">R</span> Min Price</label>
-    <input type="number" id="min_price" name="min_price" placeholder="Min (R)" 
-           value="<?php echo $min_price > 0 ? $min_price : ''; ?>" min="0" step="50">
-</div>
+                        <label class="filter-label"><span>R</span> Min Price</label>
+                        <input type="number" name="min_price" class="filter-input" placeholder="Min (R)" 
+                               value="<?php echo $min_price > 0 ? $min_price : ''; ?>" min="0" step="50">
+                    </div>
 
-<div class="filter-group">
-    <label for="max_price"><span class="text-gray-700 font-medium">R</span> Max Price</label>
-    <input type="number" id="max_price" name="max_price" placeholder="Max (R)" 
-           value="<?php echo $max_price > 0 ? $max_price : ''; ?>" min="0" step="50">
-</div>
-
+                    <div class="filter-group">
+                        <label class="filter-label"><span>R</span> Max Price</label>
+                        <input type="number" name="max_price" class="filter-input" placeholder="Max (R)" 
+                               value="<?php echo $max_price > 0 ? $max_price : ''; ?>" min="0" step="50">
+                    </div>
                     
                     <div class="filter-group">
-                        <label for="bedrooms"><i class="fas fa-bed"></i> Bedrooms</label>
-                        <select id="bedrooms" name="bedrooms">
+                        <label class="filter-label"><i class="fas fa-bed"></i> Bedrooms</label>
+                        <select name="bedrooms" class="filter-select">
                             <option value="">Any</option>
                             <option value="1" <?php echo $bedrooms == 1 ? 'selected' : ''; ?>>1</option>
                             <option value="2" <?php echo $bedrooms == 2 ? 'selected' : ''; ?>>2</option>
@@ -720,8 +758,8 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
                     </div>
                     
                     <div class="filter-group">
-                        <label for="property_type"><i class="fas fa-home"></i> Property Type</label>
-                        <select id="property_type" name="property_type">
+                        <label class="filter-label"><i class="fas fa-home"></i> Property Type</label>
+                        <select name="property_type" class="filter-select">
                             <option value="">Any Type</option>
                             <?php foreach ($property_types as $type): ?>
                                 <option value="<?php echo htmlspecialchars($type); ?>" 
@@ -745,15 +783,13 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
         </div>
 
         <!-- Properties Section -->
-        <div class="section">
-            <div class="section-header">
-                <h2>
+        <div class="properties-container">
+            <div class="properties-header">
+                <div class="properties-title">
                     <i class="fas fa-home"></i>
                     Available Properties
-                </h2>
-                <div class="results-summary">
-                    <?php echo $total_properties; ?> properties found
                 </div>
+                <div class="properties-count"><?php echo $total_properties; ?> properties found</div>
             </div>
             
             <?php if ($available_properties && mysqli_num_rows($available_properties) > 0): ?>
@@ -814,15 +850,10 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
                                     <div class="property-price">R<?php echo number_format($property['rent_amount']); ?>/month</div>
                                 <?php endif; ?>
                                 
-                                <p><?php echo htmlspecialchars(substr($property['description'] ?? '', 0, 100)); ?>
+                                <p class="property-description"><?php echo htmlspecialchars(substr($property['description'] ?? '', 0, 100)); ?>
                                    <?php echo strlen($property['description'] ?? '') > 100 ? '...' : ''; ?></p>
                                 
                                 <div class="property-footer">
-                                    <div class="landlord-info">
-                                        
-                                        <span></span>
-                                    </div>
-                                    
                                     <div class="property-actions">
                                         <a href="property_details.php?id=<?php echo $property['id']; ?>" class="btn btn-outline">
                                             <i class="fas fa-eye"></i> View
@@ -938,8 +969,8 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Price validation
-            const minPriceInput = document.getElementById('min_price');
-            const maxPriceInput = document.getElementById('max_price');
+            const minPriceInput = document.querySelector('input[name="min_price"]');
+            const maxPriceInput = document.querySelector('input[name="max_price"]');
             
             function validatePriceRange() {
                 const minPrice = parseFloat(minPriceInput.value) || 0;
@@ -952,8 +983,10 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
                 }
             }
             
-            minPriceInput.addEventListener('input', validatePriceRange);
-            maxPriceInput.addEventListener('input', validatePriceRange);
+            if (minPriceInput && maxPriceInput) {
+                minPriceInput.addEventListener('input', validatePriceRange);
+                maxPriceInput.addEventListener('input', validatePriceRange);
+            }
             
             // Auto-hide alerts after 5 seconds
             const alerts = document.querySelectorAll('.alert');
@@ -967,8 +1000,6 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             });
         });
     </script>
-
-    
 </body>
 </html>
 
