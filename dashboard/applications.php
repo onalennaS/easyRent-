@@ -543,6 +543,15 @@ body {
     background: #dc2626;
 }
 
+.btn-info {
+    background: #0ea5e9;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #0284c7;
+}
+
 /* Modal */
 .modal {
     display: none;
@@ -632,6 +641,126 @@ textarea.form-control {
     margin-top: 1rem;
 }
 
+/* Tenant Profile Modal */
+.tenant-profile-modal .modal-content {
+    max-width: 800px;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.profile-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.profile-info h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+    color: #1e293b;
+}
+
+.profile-info p {
+    color: #64748b;
+}
+
+.profile-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.profile-section {
+    margin-bottom: 1.5rem;
+}
+
+.profile-section h4 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: #1e293b;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-label {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.info-value {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.document-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    background: #f8fafc;
+    transition: all 0.3s ease;
+}
+
+.document-card:hover {
+    border-color: #3b82f6;
+    background: white;
+    transform: translateY(-2px);
+}
+
+.document-icon {
+    font-size: 2rem;
+    color: #3b82f6;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.document-name {
+    font-weight: 500;
+    text-align: center;
+    color: #1e293b;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -660,6 +789,10 @@ textarea.form-control {
     .applications-table {
         display: block;
         overflow-x: auto;
+    }
+    
+    .profile-sections {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -700,6 +833,11 @@ textarea.form-control {
     
     .filter-group {
         width: 100%;
+    }
+    
+    .profile-header {
+        flex-direction: column;
+        text-align: center;
     }
 }
     </style>
@@ -847,7 +985,7 @@ textarea.form-control {
             <table class="applications-table">
                 <thead>
                     <tr>
-                        <th>Application ID</th>
+                        
                         <th>Property</th>
                         <th>Tenant</th>
                         <th>Application Date</th>
@@ -858,7 +996,7 @@ textarea.form-control {
                 <tbody>
                     <?php foreach ($applications as $app): ?>
                         <tr>
-                            <td>#<?php echo $app['id']; ?></td>
+                           
                             <td><?php echo htmlspecialchars($app['property_title']); ?></td>
                             <td class="tenant-info">
                                 <span class="tenant-name"><?php echo htmlspecialchars($app['first_name'] . ' ' . $app['last_name']); ?></span>
@@ -872,6 +1010,11 @@ textarea.form-control {
                                 </span>
                             </td>
                             <td class="application-actions">
+                                <button class="btn btn-info view-tenant-profile" 
+                                        data-id="<?php echo $app['tenant_id']; ?>"
+                                        data-name="<?php echo htmlspecialchars($app['first_name'] . ' ' . $app['last_name']); ?>">
+                                    <i class="fas fa-user"></i>
+                                </button>
                                 <?php if ($app['status'] === 'approved'): ?>
                                     <button class="btn btn-secondary" disabled title="Application already approved">
                                         <i class="fas fa-lock"></i>
@@ -934,12 +1077,111 @@ textarea.form-control {
         </div>
     </div>
     
+    <!-- Tenant Profile Modal -->
+    <div class="modal tenant-profile-modal" id="tenantProfileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Tenant Profile</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-header">
+                    <div class="profile-avatar" id="tenantAvatar">
+                        <!-- Avatar will be populated by JavaScript -->
+                    </div>
+                    <div class="profile-info">
+                        <h3 id="tenantName"></h3>
+                        <p id="tenantContact"></p>
+                    </div>
+                </div>
+                
+                <div class="profile-sections">
+                    <div class="left-section">
+                        <div class="profile-section">
+                            <h4><i class="fas fa-info-circle"></i> Personal Information</h4>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">ID Number</span>
+                                    <span class="info-value" id="tenantIdNumber"></span>
+                                </div>
+                               
+                                <div class="info-item">
+                                    <span class="info-label">Address</span>
+                                    <span class="info-value" id="tenantAddress"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="profile-section">
+                            <h4><i class="fas fa-briefcase"></i> Employment Information</h4>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">Employment Status</span>
+                                    <span class="info-value" id="tenantEmployment"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Employer</span>
+                                    <span class="info-value" id="tenantEmployer"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Job Title</span>
+                                    <span class="info-value" id="tenantJobTitle"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Monthly Income</span>
+                                    <span class="info-value" id="tenantIncome"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="right-section">
+                        <div class="profile-section">
+                            <h4><i class="fas fa-phone"></i> Emergency Contact</h4>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">Name</span>
+                                    <span class="info-value" id="emergencyName"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Phone</span>
+                                    <span class="info-value" id="emergencyPhone"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Relationship</span>
+                                    <span class="info-value" id="emergencyRelationship"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="profile-section">
+                            <h4><i class="fas fa-file-alt"></i> Rental History</h4>
+                            <div class="info-item">
+                                <span class="info-value" id="rentalHistory"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="profile-section">
+                            <h4><i class="fas fa-file-upload"></i> Documents</h4>
+                            <div class="documents-grid" id="tenantDocuments">
+                                <!-- Documents will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary close-modal">Close</button>
+            </div>
+        </div>
+    </div>
    
 <script>
 // Modal functionality
 const modals = document.querySelectorAll('.modal');
 const closeButtons = document.querySelectorAll('.close-modal');
 const updateButtons = document.querySelectorAll('.update-status');
+const viewProfileButtons = document.querySelectorAll('.view-tenant-profile');
 const logoutLink = document.getElementById('logoutLink');
 const statusSelect = document.getElementById('statusSelect');
 const rentInputGroup = document.getElementById('rentInputGroup');
@@ -981,6 +1223,127 @@ updateButtons.forEach(button => {
         openModal('statusModal');
     });
 });
+
+// View tenant profile button click
+viewProfileButtons.forEach(button => {
+    button.addEventListener('click', function() {
+        const tenantId = this.getAttribute('data-id');
+        const tenantName = this.getAttribute('data-name');
+        
+        // Show loading state
+        Swal.fire({
+            title: 'Loading Profile',
+            text: 'Please wait while we fetch the tenant profile...',
+            icon: 'info',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Fetch tenant profile data via AJAX
+        fetch(`get_tenant_profile.php?tenant_id=${tenantId}`)
+            .then(response => response.json())
+            .then(data => {
+                Swal.close();
+                
+                if (data.success) {
+                    // Populate the modal with tenant data
+                    document.getElementById('tenantName').textContent = tenantName;
+                    document.getElementById('tenantContact').textContent = `${data.profile.email} • ${data.profile.phone}`;
+                    
+                    // Set avatar
+                    const avatarElement = document.getElementById('tenantAvatar');
+                    if (data.profile.profile_image) {
+                        avatarElement.innerHTML = `<img src="../uploads/tenant_profiles/${data.profile.profile_image}" alt="${tenantName}">`;
+                    } else {
+                        avatarElement.textContent = tenantName.charAt(0).toUpperCase();
+                    }
+                    
+                    // Personal info
+                    document.getElementById('tenantIdNumber').textContent = data.profile.id_number || 'Not provided';
+                    
+                    document.getElementById('tenantAddress').textContent = 
+                        `${data.profile.address || ''}, ${data.profile.city || ''}, ${data.profile.province || ''}, ${data.profile.postal_code || ''}`.trim();
+                    
+                    // Employment info
+                    document.getElementById('tenantEmployment').textContent = formatEmploymentStatus(data.profile.employment_status) || 'Not provided';
+                    document.getElementById('tenantEmployer').textContent = data.profile.employer_name || 'Not provided';
+                    document.getElementById('tenantJobTitle').textContent = data.profile.job_title || 'Not provided';
+                    document.getElementById('tenantIncome').textContent = data.profile.monthly_income ? 
+                        `R ${parseFloat(data.profile.monthly_income).toLocaleString()}` : 'Not provided';
+                    
+                    // Emergency contact
+                    document.getElementById('emergencyName').textContent = data.profile.emergency_contact_name || 'Not provided';
+                    document.getElementById('emergencyPhone').textContent = data.profile.emergency_contact_phone || 'Not provided';
+                    document.getElementById('emergencyRelationship').textContent = data.profile.emergency_contact_relationship || 'Not provided';
+                    
+                    // Rental history
+                    document.getElementById('rentalHistory').textContent = data.profile.rental_history || 'No rental history provided';
+                    
+                    // Documents
+                    const documentsContainer = document.getElementById('tenantDocuments');
+                    documentsContainer.innerHTML = '';
+                    
+                    if (data.documents && data.documents.length > 0) {
+                        data.documents.forEach(doc => {
+                            const docCard = document.createElement('div');
+                            docCard.className = 'document-card';
+                            docCard.innerHTML = `
+                                <div class="document-icon">
+                                    <i class="fas fa-file-pdf"></i>
+                                </div>
+                                <div class="document-name">${doc.document_name}</div>
+                            `;
+                            // Add click to view functionality
+                            docCard.addEventListener('click', () => {
+                                window.open(`../uploads/tenant_documents/${doc.file_path}`, '_blank');
+                            });
+                            documentsContainer.appendChild(docCard);
+                        });
+                    } else {
+                        documentsContainer.innerHTML = '<p>No documents uploaded</p>';
+                    }
+                    
+                    // Show the modal
+                    openModal('tenantProfileModal');
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Failed to load tenant profile',
+                        confirmButtonColor: '#ef4444'
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.close();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to fetch tenant profile. Please try again.',
+                    confirmButtonColor: '#ef4444'
+                });
+                console.error('Error:', error);
+            });
+    });
+});
+
+// Helper function to format employment status
+function formatEmploymentStatus(status) {
+    if (!status) return '';
+    
+    const statusMap = {
+        'employed': 'Employed',
+        'self_employed': 'Self Employed',
+        'student': 'Student',
+        'unemployed': 'Unemployed',
+        'retired': 'Retired'
+    };
+    
+    return statusMap[status] || status;
+}
 
 // Close modals when clicking close button or outside modal
 closeButtons.forEach(button => {

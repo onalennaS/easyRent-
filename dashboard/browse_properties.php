@@ -34,6 +34,41 @@ if ($applied_result && mysqli_num_rows($applied_result) > 0) {
     }
 }
 
+// Check if tenant has completed their profile
+$profile_complete = false;
+$profile_check_query = "SELECT full_name, email, phone, address, city, province, postal_code, id_number, employment_status, monthly_income, emergency_contact_name, emergency_contact_phone FROM tenant_profiles WHERE tenant_id = $tenant_id";
+$profile_result = mysqli_query($conn, $profile_check_query);
+
+if ($profile_result && mysqli_num_rows($profile_result) > 0) {
+    $profile_data = mysqli_fetch_assoc($profile_result);
+    // Check if all required fields are filled
+    $required_fields = ['full_name', 'email', 'phone', 'address', 'city', 'province', 'postal_code', 'id_number', 'employment_status', 'monthly_income', 'emergency_contact_name', 'emergency_contact_phone'];
+    
+    $profile_complete = true;
+    foreach ($required_fields as $field) {
+        if (empty($profile_data[$field])) {
+            $profile_complete = false;
+            break;
+        }
+    }
+}
+// Check tenant documents completeness
+$documents_complete = false;
+$uploaded_docs_count = 0;
+$total_possible_docs = 7; // Total document types available
+
+if ($profile_complete) {
+    $docs_query = "SELECT COUNT(*) as doc_count FROM tenant_documents WHERE tenant_id = $tenant_id";
+    $docs_result = mysqli_query($conn, $docs_query);
+    
+    if ($docs_result) {
+        $docs_data = mysqli_fetch_assoc($docs_result);
+        $uploaded_docs_count = $docs_data['doc_count'];
+        // Consider documents complete if they have at least 3 key documents
+        $documents_complete = $uploaded_docs_count >= 3;
+    }
+}
+
 // Check what columns exist in tables
 $check_properties_query = "SHOW COLUMNS FROM properties";
 $properties_columns_result = mysqli_query($conn, $check_properties_query);
@@ -154,6 +189,13 @@ if (!$available_properties) {
 if ($has_applications_table && isset($_POST['apply_property'])) {
     $property_id = intval($_POST['property_id']);
     
+    // Check if profile is complete before allowing application
+    if (!$profile_complete) {
+        $_SESSION['error_message'] = "Please complete your profile before applying for properties.";
+        header("Location: browse_properties.php?" . http_build_query($_GET));
+        exit();
+    }
+    
     // Check if already applied
     $check_existing = "SELECT id FROM rental_applications WHERE tenant_id = $tenant_id AND property_id = $property_id";
     $existing_result = mysqli_query($conn, $check_existing);
@@ -186,6 +228,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Browse Properties - Easy Rent</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --primary-color: #7c3aed;
@@ -223,7 +266,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             top: 0;
             width: 250px;
             height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
             color: white;
             padding: 20px 0;
             z-index: 1000;
@@ -688,13 +731,14 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
         </div>
         <ul>
             <li><a href="../index.php"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
             <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
             <li><a href="browse_properties.php" class="active"><i class="fas fa-search"></i> Browse Properties</a></li>
             <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> My Applications</a></li>
             <li><a href="my_lease.php"><i class="fas fa-file-contract"></i> My Lease</a></li>
             <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
-            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
+            
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
@@ -859,19 +903,25 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
                                             <i class="fas fa-eye"></i> View
                                         </a>
                                         <?php if ($has_applications_table): ?>
-                                            <?php if (in_array($property['id'], $applied_property_ids)): ?>
-                                                <span class="btn btn-disabled">
-                                                    <i class="fas fa-check-circle"></i> Applied
-                                                </span>
-                                            <?php else: ?>
-                                                <form method="POST" style="display: inline;">
-                                                    <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                                    <button type="submit" name="apply_property" class="btn btn-success">
-                                                        <i class="fas fa-paper-plane"></i> Apply
-                                                    </button>
-                                                </form>
-                                            <?php endif; ?>
-                                        <?php endif; ?>
+    <?php if (in_array($property['id'], $applied_property_ids)): ?>
+        <span class="btn btn-disabled">
+            <i class="fas fa-check-circle"></i> Applied
+        </span>
+    <?php else: ?>
+<?php if ($profile_complete): ?>
+    <form method="POST" style="display: inline;" id="applyForm_<?php echo $property['id']; ?>">
+        <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
+        <button type="button" class="btn btn-success" onclick="confirmApplication(<?php echo $property['id']; ?>, '<?php echo htmlspecialchars(addslashes($property['title'])); ?>')">
+            <i class="fas fa-paper-plane"></i> Apply
+        </button>
+    </form>
+<?php else: ?>
+    <button type="button" class="btn btn-success" onclick="showProfileIncompleteAlert()">
+        <i class="fas fa-paper-plane"></i> Apply
+    </button>
+<?php endif; ?>
+    <?php endif; ?>
+<?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -1000,6 +1050,75 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             });
         });
     </script>
+<script>
+function showProfileIncompleteAlert() {
+    Swal.fire({
+        title: 'Profile Incomplete',
+        html: 'You need to complete your tenant profile before applying for properties.<br><br>A complete profile increases your chances of approval!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#667eea',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: '<i class="fas fa-user-edit"></i> Complete Profile',
+        cancelButtonText: 'Later'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = 'tenant_profile.php';
+        }
+    });
+}
+
+function confirmApplication(propertyId, propertyTitle) {
+    Swal.fire({
+        title: 'Confirm Application',
+        html: `Are you sure you want to apply for:<br><br><strong>${propertyTitle}</strong><br><br>This will submit your rental application to the property owner.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: '<i class="fas fa-paper-plane"></i> Yes, Apply',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading state
+            Swal.fire({
+                title: 'Submitting Application',
+                text: 'Please wait...',
+                icon: 'info',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Create and submit a hidden form with the apply_property field
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.style.display = 'none';
+            
+            // Add property_id field
+            const propertyIdInput = document.createElement('input');
+            propertyIdInput.type = 'hidden';
+            propertyIdInput.name = 'property_id';
+            propertyIdInput.value = propertyId;
+            form.appendChild(propertyIdInput);
+            
+            // Add apply_property field (this is what the PHP looks for)
+            const applyInput = document.createElement('input');
+            applyInput.type = 'hidden';
+            applyInput.name = 'apply_property';
+            applyInput.value = '1';
+            form.appendChild(applyInput);
+            
+            // Add to page and submit
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+}
+</script>
 </body>
 </html>
 

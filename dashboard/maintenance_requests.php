@@ -851,13 +851,15 @@ $properties_result = mysqli_query($conn, $properties_query);
         </div>
         <ul class="nav-links">
             <li><a href="../index.php"><i class="fas fa-home"></i> <span>Home</span></a></li>
+            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> <span>Profile</span></a></li>
             <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
+
             <li><a href="browse_properties.php"><i class="fas fa-search"></i> <span>Browse Properties</span></a></li>
             <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> <span>My Applications</span></a></li>
             <li><a href="my_lease.php"><i class="fas fa-file-contract"></i> <span>My Lease</span></a></li>
             <li><a href="maintenance_requests.php" class="active"><i class="fas fa-tools"></i> <span>Maintenance</span></a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> <span>Payments</span></a></li>
-            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> <span>Profile</span></a></li>
+            
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
         </ul>
     </div>

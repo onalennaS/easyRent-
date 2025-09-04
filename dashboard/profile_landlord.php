@@ -747,6 +747,11 @@ $bank_branches = [
             justify-content: between;
             gap: 0.5rem;
         }
+        .profile-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 
         .file-info {
             flex: 1;
@@ -1144,10 +1149,17 @@ $bank_branches = [
 
         <!-- Profile Container -->
         <div class="profile-container">
-            <div class="profile-header">
-                <h2><i class="fas fa-user-circle"></i> Complete Your Landlord Profile</h2>
-                <p>Provide accurate information and required documents to increase your approval chances</p>
-            </div>
+<div class="profile-header">
+    <?php if (!empty($profile['profile_image'])): ?>
+        <div class="profile-image-container" style="margin-bottom: 1rem;">
+            <img src="../uploads/profiles/<?php echo htmlspecialchars($profile['profile_image']); ?>" 
+                 alt="Profile Image" 
+                 style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid white; object-fit: cover;">
+        </div>
+    <?php endif; ?>
+    <h2><i class="fas fa-user-circle"></i> Complete Your Landlord Profile</h2>
+    <p>Provide accurate information and required documents to increase your approval chances</p>
+</div>
 
             <!-- Profile Completion Status -->
 <div class="completion-status">
@@ -1261,11 +1273,42 @@ $bank_branches = [
                                 <div id="tax_number_validation" class="validation-message"></div>
                             </div>
 
-                            <div class="form-group">
-                                <label for="profile_image" class="form-label">Profile Image</label>
-                                <input type="file" id="profile_image" name="profile_image" class="form-input" accept="image/*">
-                                <div id="profile_image_validation" class="validation-message"></div>
-                            </div>
+                           <div class="form-group">
+    <label for="profile_image" class="form-label">Profile Image</label>
+    <div style="display: flex; align-items: center; gap: 1.5rem;">
+        <div class="image-preview-container">
+            <?php if (!empty($profile['profile_image'])): ?>
+                <img id="currentImage" src="../uploads/profiles/<?php echo htmlspecialchars($profile['profile_image']); ?>" 
+                     alt="Current Profile Image" 
+                     style="width: 80px; height: 80px; border-radius: 8px; border: 1px solid #e5e7eb; object-fit: cover;">
+            <?php else: ?>
+                <div id="noImagePlaceholder" style="width: 80px; height: 80px; border: 2px dashed #d1d5db; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #9ca3af;">
+                    <i class="fas fa-user" style="font-size: 1.5rem;"></i>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Hidden preview image that shows when file is selected -->
+            <img id="imagePreview" 
+                 style="width: 80px; height: 80px; border-radius: 8px; border: 1px solid #e5e7eb; object-fit: cover; display: none;" 
+                 alt="Preview">
+        </div>
+        
+        <div class="upload-section" style="flex: 1;">
+            <input type="file" id="profile_image" name="profile_image" class="form-input" accept="image/*">
+            <p id="imageStatus" style="font-size: 0.875rem; color: #9ca3af; margin-top: 0.5rem; margin-bottom: 0;">
+                <?php if (!empty($profile['profile_image'])): ?>
+                    Upload new image to replace current
+                <?php else: ?>
+                    Upload your profile image
+                <?php endif; ?>
+            </p>
+            <button type="button" id="cancelImageChange" style="display: none; margin-top: 0.5rem; padding: 0.25rem 0.75rem; background: #6b7280; color: white; border: none; border-radius: 4px; font-size: 0.875rem; cursor: pointer;">
+                Cancel Change
+            </button>
+        </div>
+    </div>
+    <div id="profile_image_validation" class="validation-message"></div>
+</div>
                         </div>
                     </div>
 
@@ -2216,28 +2259,28 @@ function updateCompletionStatus() {
         `Required Documents (${Math.min(totalDocs, 8)}/8)`;
     if (requiredDocsComplete) completedItems++;
     
-    // Update other items based on your logic
+    // Optional docs - mark as completed if 5+ docs uploaded
     const hasOptionalDocs = totalDocs >= 5;
     document.getElementById('optional-docs').className = 
-        `completion-item ${hasOptionalDocs ? 'completed' : 'pending'}`;
+        `completion-item ${hasOptionalDocs ? 'completed' : 'incomplete'}`;
     if (hasOptionalDocs) completedItems++;
     
-    // NEW: Check if all documents have been reviewed (approved or rejected)
-    const existingDocsData = <?php echo json_encode($existing_documents); ?>;
-    const allDocsReviewed = Object.keys(existingDocsData).length > 0 && 
-        Object.values(existingDocsData).every(doc => 
-            doc.status === 'approved' || doc.status === 'rejected'
-        );
-    
-    // Profile review status - should be green when all documents are reviewed
+    // Profile review - completed if basic info is filled and at least one document exists
+    const profileReviewComplete = personalComplete && addressComplete && bankingComplete && totalDocs > 0;
     document.getElementById('profile-review').className = 
-        `completion-item ${allDocsReviewed ? 'completed' : 'pending'}`;
-    if (allDocsReviewed) completedItems++;
+        `completion-item ${profileReviewComplete ? 'completed' : 'pending'}`;
+    if (profileReviewComplete) completedItems++;
     
-    const canListProperties = personalComplete && addressComplete && bankingComplete && requiredDocsComplete && allDocsReviewed;
+    // Ready to list properties - all requirements met
+    const canListProperties = personalComplete && addressComplete && bankingComplete && requiredDocsComplete;
     document.getElementById('listing-ready').className = 
         `completion-item ${canListProperties ? 'completed' : 'incomplete'}`;
     if (canListProperties) completedItems++;
+    
+    // Profile image bonus - add extra completion if profile image exists
+    const hasProfileImage = <?php echo !empty($profile['profile_image']) ? 'true' : 'false'; ?> || 
+        document.getElementById('profile_image').files.length > 0;
+    if (hasProfileImage) completedItems++;
     
     // Update progress bar and percentage
     const percentage = Math.round((completedItems / totalItems) * 100);
@@ -2259,6 +2302,91 @@ document.querySelectorAll('input, select, textarea').forEach(element => {
     element.addEventListener('change', updateCompletionStatus);
     element.addEventListener('input', updateCompletionStatus);
 });
+// Profile image preview functionality
+document.getElementById('profile_image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('imagePreview');
+    const currentImage = document.getElementById('currentImage');
+    const noImagePlaceholder = document.getElementById('noImagePlaceholder');
+    const imageStatus = document.getElementById('imageStatus');
+    const cancelBtn = document.getElementById('cancelImageChange');
+    
+    if (file) {
+        // Validate file
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            Swal.fire({
+                title: 'File Too Large',
+                text: 'Please select an image smaller than 5MB',
+                icon: 'error',
+                confirmButtonColor: '#3b82f6'
+            });
+            this.value = '';
+            return;
+        }
+        
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (!allowedTypes.includes(file.type)) {
+            Swal.fire({
+                title: 'Invalid File Type',
+                text: 'Please select a JPG or PNG image',
+                icon: 'error',
+                confirmButtonColor: '#3b82f6'
+            });
+            this.value = '';
+            return;
+        }
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            
+            // Hide current image or placeholder
+            if (currentImage) currentImage.style.display = 'none';
+            if (noImagePlaceholder) noImagePlaceholder.style.display = 'none';
+            
+            // Update status text and show cancel button
+            imageStatus.textContent = 'New image selected - Save to confirm';
+            imageStatus.style.color = '#3b82f6';
+            cancelBtn.style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+        
+    } else {
+        resetImagePreview();
+    }
+});
+
+// Cancel image change functionality
+document.getElementById('cancelImageChange').addEventListener('click', function() {
+    document.getElementById('profile_image').value = '';
+    resetImagePreview();
+});
+
+function resetImagePreview() {
+    const preview = document.getElementById('imagePreview');
+    const currentImage = document.getElementById('currentImage');
+    const noImagePlaceholder = document.getElementById('noImagePlaceholder');
+    const imageStatus = document.getElementById('imageStatus');
+    const cancelBtn = document.getElementById('cancelImageChange');
+    
+    // Hide preview
+    preview.style.display = 'none';
+    
+    // Show original image or placeholder
+    if (currentImage) currentImage.style.display = 'block';
+    if (noImagePlaceholder) noImagePlaceholder.style.display = 'flex';
+    
+    // Reset status text
+    <?php if (!empty($profile['profile_image'])): ?>
+        imageStatus.textContent = 'Upload new image to replace current';
+    <?php else: ?>
+        imageStatus.textContent = 'Upload your profile image';
+    <?php endif; ?>
+    imageStatus.style.color = '#9ca3af';
+    cancelBtn.style.display = 'none';
+}
     </script>
 </body>
 </html>

@@ -295,6 +295,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
         $error_message = "Error terminating lease: " . mysqli_error($conn);
     }
 }
+// Add this after your form processing logic, right after successful lease creation
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
+    // ... your existing lease creation code ...
+    
+    if (mysqli_query($conn, $insert_query)) {
+        // Instead of setting $success_message, output JSON for AJAX
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Lease agreement created successfully!']);
+            exit();
+        } else {
+            $success_message = "Lease agreement created successfully!";
+            // Add a meta refresh as fallback
+            echo '<script>setTimeout(function(){ window.location.reload(); }, 2000);</script>';
+        }
+    } else {
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Error creating lease: ' . mysqli_error($conn)]);
+            exit();
+        } else {
+            $error_message = "Error creating lease: " . mysqli_error($conn);
+        }
+    }
+}
 ?>
 
 
@@ -819,6 +844,17 @@ textarea.form-control {
     background-color: #fff;
     border-radius: 8px;
     box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+    touch-action: none; /* Prevent scrolling while signing */
+    cursor: crosshair;
+}
+
+.signature-pad-wrapper {
+    position: relative;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: white;
+    margin-bottom: 1rem;
+    touch-action: none; /* Prevent scrolling */
 }
 
 .signature-guide {
@@ -1433,19 +1469,19 @@ textarea.form-control {
                     
                     <div class="form-group">
                         <label class="form-label">Lease Template</label>
-                        <select name="template_id" class="form-control" required id="templateSelect">
-                            <option value="">Select a template</option>
-                            <?php if (!empty($templates)): ?>
-                                <?php foreach ($templates as $template): ?>
-                                    <option value="<?php echo $template['id']; ?>">
-                                        <?php echo htmlspecialchars($template['template_name']); ?>
-                                        (<?php echo date('M j, Y', strtotime($template['created_at'])); ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="" disabled>No templates available - Create one first</option>
-                            <?php endif; ?>
-                        </select>
+<select name="template_id" class="form-control" <?php echo !empty($templates) ? 'required' : 'disabled'; ?> id="templateSelect">
+    <option value="">Select a template</option>
+    <?php if (!empty($templates)): ?>
+        <?php foreach ($templates as $template): ?>
+            <option value="<?php echo $template['id']; ?>">
+                <?php echo htmlspecialchars($template['template_name']); ?>
+                (<?php echo date('M j, Y', strtotime($template['created_at'])); ?>)
+            </option>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <option value="" disabled>No templates available - Create one first</option>
+    <?php endif; ?>
+</select>
                     </div>
                     
                     <div class="form-group">
@@ -1669,11 +1705,47 @@ textarea.form-control {
         });
 
         // Initialize signature pad
-        const canvas = document.getElementById('signature-pad');
-        const signaturePad = new SignaturePad(canvas, {
-            backgroundColor: 'rgba(255, 255, 255, 0)',
-            penColor: 'rgb(0, 0, 0)'
-        });
+        // Initialize signature pad with smooth settings
+const canvas = document.getElementById('signature-pad');
+
+// Function to resize canvas for proper signature pad functionality
+function resizeCanvas() {
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext("2d").scale(ratio, ratio);
+    signaturePad.clear(); // Clear on resize to avoid artifacts
+}
+
+const signaturePad = new SignaturePad(canvas, {
+    backgroundColor: 'rgba(255, 255, 255, 0)',
+    penColor: 'rgb(0, 0, 0)',
+    minWidth: 1,
+    maxWidth: 3,
+    throttle: 16, // Smooth drawing
+    minDistance: 1,
+    velocityFilterWeight: 0.7,
+    dotSize: function () {
+        return (this.minWidth + this.maxWidth) / 2;
+    }
+});
+
+// Resize canvas when modal opens
+document.querySelectorAll('.sign-lease-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const leaseId = this.getAttribute('data-lease-id');
+        document.getElementById('lease_id').value = leaseId;
+        openModal('signLeaseModal');
+        
+        // Resize canvas after modal is opened
+        setTimeout(() => {
+            resizeCanvas();
+        }, 100);
+    });
+});
+
+// Handle window resize
+window.addEventListener("resize", resizeCanvas);
 
         // Handle modal functionality
         const modals = document.querySelectorAll('.modal');
@@ -1688,43 +1760,61 @@ textarea.form-control {
         }
         
         // Create lease buttons
-        document.querySelectorAll('.create-lease-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const tenantName = this.getAttribute('data-tenant-name');
-                const propertyName = this.getAttribute('data-property-name');
-                const applicationId = this.getAttribute('data-application-id');
-                const tenantId = this.getAttribute('data-tenant-id');
-                
-                // Check if tenant already has a draft lease via AJAX
-                fetch('check_draft_lease.php?tenant_id=' + tenantId)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.has_draft) {
-                            Swal.fire({
-                                title: 'Draft Exists',
-                                text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
-                                icon: 'warning',
-                                confirmButtonText: 'OK'
-                            });
-                        } else {
-                            document.getElementById('tenantName').value = tenantName;
-                            document.getElementById('propertyName').value = propertyName;
-                            document.getElementById('application_id').value = applicationId;
-                            
-                            openModal('createLeaseModal');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        // If there's an error with the check, still allow opening the modal
-                        document.getElementById('tenantName').value = tenantName;
-                        document.getElementById('propertyName').value = propertyName;
-                        document.getElementById('application_id').value = applicationId;
-                        
-                        openModal('createLeaseModal');
-                    });
+// Create lease buttons
+document.querySelectorAll('.create-lease-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const tenantName = this.getAttribute('data-tenant-name');
+        const propertyName = this.getAttribute('data-property-name');
+        const applicationId = this.getAttribute('data-application-id');
+        const tenantId = this.getAttribute('data-tenant-id');
+        
+        // First check if there are any lease templates available
+        <?php if (empty($templates)): ?>
+            Swal.fire({
+                title: 'No Lease Templates Available',
+                text: 'You have no available leases. Please create a lease template first.',
+                icon: 'warning',
+                confirmButtonText: 'Create Template',
+                showCancelButton: true,
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    openModal('createTemplateModal');
+                }
             });
-        });
+            return;
+        <?php endif; ?>
+        
+        // Check if tenant already has a draft lease via AJAX
+        fetch('check_draft_lease.php?tenant_id=' + tenantId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_draft) {
+                    Swal.fire({
+                        title: 'Draft Exists',
+                        text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
+                        icon: 'warning',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    document.getElementById('tenantName').value = tenantName;
+                    document.getElementById('propertyName').value = propertyName;
+                    document.getElementById('application_id').value = applicationId;
+                    
+                    openModal('createLeaseModal');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // If there's an error with the check, still allow opening the modal
+                document.getElementById('tenantName').value = tenantName;
+                document.getElementById('propertyName').value = propertyName;
+                document.getElementById('application_id').value = applicationId;
+                
+                openModal('createLeaseModal');
+            });
+    });
+});
 
         // Terminate lease buttons
         document.querySelectorAll('.terminate-lease-btn').forEach(button => {
@@ -1882,153 +1972,111 @@ textarea.form-control {
         });
 
         // Handle lease agreement creation with confirmation
-        document.getElementById('leaseForm').addEventListener('submit', function(e) {
-            e.preventDefault(); // Always prevent default first
-            
-            const templateId = this.elements['template_id'].value;
-            const tenantName = document.getElementById('tenantName').value;
-            const propertyName = document.getElementById('propertyName').value;
-            const startDate = this.elements['start_date'].value;
-            const endDate = this.elements['end_date'].value;
-            const rentAmount = this.elements['rent_amount'].value;
-            
-            // Validation
-            if (!templateId) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please select a lease template',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
+// Handle lease agreement creation with confirmation
+document.getElementById('leaseForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Always prevent default first
+    
+    const templateId = this.elements['template_id'].value;
+    const tenantName = document.getElementById('tenantName').value;
+    const propertyName = document.getElementById('propertyName').value;
+    const startDate = this.elements['start_date'].value;
+    const endDate = this.elements['end_date'].value;
+    const rentAmount = this.elements['rent_amount'].value;
+    
+    // Validation
+    if (!templateId) {
+        Swal.fire({
+            title: 'Error',
+            text: 'Please select a lease template',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
 
-            // Confirmation dialog
+    // Confirmation dialog
+    Swal.fire({
+        title: 'Create Lease Agreement?',
+        html: `
+            <div style="text-align: left; margin: 1rem 0;">
+                <p><strong>Tenant:</strong> ${tenantName}</p>
+                <p><strong>Property:</strong> ${propertyName}</p>
+                <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
+                <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
+            </div>
+            <p style="margin-top: 1rem;">Are you sure you want to create this lease agreement?</p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3b82f6',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, create lease',
+        cancelButtonText: 'Cancel',
+        customClass: {
+            htmlContainer: 'text-left'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading
             Swal.fire({
-                title: 'Create Lease Agreement?',
-                html: `
-                    <div style="text-align: left; margin: 1rem 0;">
-                        <p><strong>Tenant:</strong> ${tenantName}</p>
-                        <p><strong>Property:</strong> ${propertyName}</p>
-                        <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
-                        <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
-                    </div>
-                    <p style="margin-top: 1rem;">Are you sure you want to create this lease agreement?</p>
-                `,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#3b82f6',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: 'Yes, create lease',
-                cancelButtonText: 'Cancel',
-                customClass: {
-                    htmlContainer: 'text-left'
+                title: 'Creating Lease Agreement',
+                text: 'Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
                 }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Show loading
+            });
+            
+            // Create FormData and submit via AJAX for better control
+            const formData = new FormData(this);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                // Close the loading dialog
+                Swal.close();
+                
+                // Check if submission was successful (you might need to adjust this based on your server response)
+                if (data.includes('Lease agreement created successfully')) {
                     Swal.fire({
-                        title: 'Creating Lease Agreement',
-                        text: 'Please wait...',
-                        allowOutsideClick: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
+                        icon: 'success',
+                        title: 'Success!',
+                        text: 'Lease agreement created successfully!',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        // Refresh the page after success message
+                        window.location.reload();
                     });
+                } else {
+                    // If there's an error, parse and show it
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data, 'text/html');
+                    const errorElement = doc.querySelector('.alert-error');
+                    const errorMessage = errorElement ? errorElement.textContent.trim() : 'An error occurred while creating the lease.';
                     
-                    // Submit the form
-                    this.submit();
-                }
-            });
-        });
-
-        // Handle lease signing with double confirmation
-        document.getElementById('signLeaseForm').addEventListener('submit', function(e) {
-            e.preventDefault(); // Always prevent default first
-            
-            if (signaturePad.isEmpty()) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please provide a signature before submitting',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-
-            // First confirmation - Review
-            Swal.fire({
-                title: 'Review Lease Details',
-                html: `
-                    <div style="text-align: left; margin: 1rem 0;">
-                        <h4 style="margin-bottom: 1rem; color: #1e293b;">Please review the lease details:</h4>
-                        <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-                            <p style="margin: 0.5rem 0;"><strong>Action:</strong> Sign and activate lease agreement</p>
-                            <p style="margin: 0.5rem 0;"><strong>Status Change:</strong> Draft → Active</p>
-                            <p style="margin: 0.5rem 0;"><strong>Effect:</strong> Lease becomes legally binding</p>
-                        </div>
-                        <div style="margin: 1rem 0; text-align: center;">
-                            <img src="${signaturePad.toDataURL()}" style="max-width: 200px; border: 1px solid #e5e7eb; border-radius: 4px;" alt="Your signature">
-                            <p style="font-size: 0.9rem; color: #64748b; margin-top: 0.5rem;">Your signature</p>
-                        </div>
-                    </div>
-                `,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: 'Continue to final step',
-                cancelButtonText: 'Cancel',
-                customClass: {
-                    htmlContainer: 'text-left'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Second confirmation - Final confirmation
                     Swal.fire({
-                        title: 'Final Confirmation',
-                        html: `
-                            <div style="text-align: center; margin: 1rem 0;">
-                                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; margin-bottom: 1rem; text-align: left;">
-                                    <strong>⚠️ Important:</strong> Once you confirm, this lease agreement will be:
-                                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                                        <li>Legally binding and active</li>
-                                        <li>Digitally signed with your signature</li>
-                                        <li>Available for tenant access</li>
-                                        <li>Cannot be easily reversed</li>
-                                    </ul>
-                                </div>
-                                <p><strong>Are you absolutely sure you want to sign and activate this lease agreement?</strong></p>
-                            </div>
-                        `,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#ef4444',
-                        cancelButtonColor: '#6b7280',
-                        confirmButtonText: 'Yes, sign and activate',
-                        cancelButtonText: 'Cancel',
-                        customClass: {
-                            htmlContainer: 'text-left'
-                        }
-                    }).then((finalResult) => {
-                        if (finalResult.isConfirmed) {
-                            // Show loading
-                            Swal.fire({
-                                title: 'Signing Lease Agreement',
-                                text: 'Processing your signature and activating lease...',
-                                allowOutsideClick: false,
-                                didOpen: () => {
-                                    Swal.showLoading();
-                                }
-                            });
-                            
-                            // Submit the form
-                            this.submit();
-                        }
+                        icon: 'error',
+                        title: 'Error!',
+                        text: errorMessage
                     });
                 }
+            })
+            .catch(error => {
+                Swal.close();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error!',
+                    text: 'An error occurred while creating the lease. Please try again.'
+                });
+                console.error('Error:', error);
             });
-        });
+        }
+    });
+});
 
         // Handle terminate lease form submission
         document.getElementById('terminateLeaseForm').addEventListener('submit', function(e) {

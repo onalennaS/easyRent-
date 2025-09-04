@@ -152,6 +152,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_profile_complete) {
                     saveImageToDB($conn, $property_id, $image_url, 0);
                 }
                 
+                // Handle amenities
+                $selected_amenities = isset($_POST['amenities']) ? $_POST['amenities'] : [];
+                if (!empty($selected_amenities)) {
+                    foreach ($selected_amenities as $amenity_id) {
+                        $amenity_query = "INSERT INTO property_amenities (property_id, amenity_id) VALUES (?, ?)";
+                        $amenity_stmt = mysqli_prepare($conn, $amenity_query);
+                        mysqli_stmt_bind_param($amenity_stmt, "ii", $property_id, $amenity_id);
+                        mysqli_stmt_execute($amenity_stmt);
+                        mysqli_stmt_close($amenity_stmt);
+                    }
+                }
+                
                 // Clear form by redirecting
                 header("Location: add_property.php?success=1");
                 exit();
@@ -199,22 +211,10 @@ function saveImageToDB($conn, $property_id, $image_url, $is_primary) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 }
-// Handle amenities
-$selected_amenities = isset($_POST['amenities']) ? $_POST['amenities'] : [];
 
 // Check for success message from redirect
 if (isset($_GET['success'])) {
     $success_message = "Property added successfully! It will be available after admin approval.";
-}
-// Save amenities to database
-if (!empty($selected_amenities)) {
-    foreach ($selected_amenities as $amenity_id) {
-        $amenity_query = "INSERT INTO property_amenities (property_id, amenity_id) VALUES (?, ?)";
-        $amenity_stmt = mysqli_prepare($conn, $amenity_query);
-        mysqli_stmt_bind_param($amenity_stmt, "ii", $property_id, $amenity_id);
-        mysqli_stmt_execute($amenity_stmt);
-        mysqli_stmt_close($amenity_stmt);
-    }
 }
 ?>
 
@@ -474,6 +474,7 @@ if (!empty($selected_amenities)) {
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 1.2rem;
             margin-bottom: 1.2rem;
+            align-items: start;
         }
 
         .form-row.single {
@@ -745,6 +746,11 @@ if (!empty($selected_amenities)) {
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* SweetAlert custom width */
+        .swal-wide {
+            width: 600px !important;
+        }
     </style>
 </head>
 <body>
@@ -847,13 +853,20 @@ if (!empty($selected_amenities)) {
             </div>
         </div>
 
-<!-- Alert Messages -->
-<?php if ($error_message): ?>
-    <div class="alert alert-error">
-        <i class="fas fa-exclamation-circle"></i>
-        <?php echo $error_message; ?>
-    </div>
-<?php endif; ?>
+        <!-- Alert Messages -->
+        <?php if ($success_message): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <?php echo $success_message; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($error_message): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i>
+                <?php echo $error_message; ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Profile Incomplete Warning -->
         <?php if (!$is_profile_complete): ?>
@@ -1348,235 +1361,231 @@ if (!empty($selected_amenities)) {
     </div>
     
     <script>
-        // Image preview functionality
-        function setupImagePreview(inputId, previewId) {
-            const input = document.getElementById(inputId);
-            const preview = document.getElementById(previewId);
-            
-            input.addEventListener('change', function() {
-                preview.innerHTML = '';
+        document.addEventListener('DOMContentLoaded', function() {
+            // Image preview functionality
+            function setupImagePreview(inputId, previewId) {
+                const input = document.getElementById(inputId);
+                const preview = document.getElementById(previewId);
                 
-                if (this.files && this.files[0]) {
-                    const file = this.files[0];
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        const img = document.createElement('img');
-                        img.src = e.target.result;
+                if (input && preview) {
+                    input.addEventListener('change', function() {
+                        preview.innerHTML = '';
                         
-                        const previewItem = document.createElement('div');
-                        previewItem.className = 'preview-item';
-                        
-                        const removeBtn = document.createElement('button');
-                        removeBtn.className = 'remove-image';
-                        removeBtn.innerHTML = '×';
-                        removeBtn.onclick = function() {
-                            preview.removeChild(previewItem);
-                            input.value = '';
-                        };
-                        
-                        previewItem.appendChild(img);
-                        previewItem.appendChild(removeBtn);
-                        preview.appendChild(previewItem);
-                    }
-                    
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-        
-        // Set up previews for all image inputs
-        setupImagePreview('main_image', 'main-preview');
-        for (let i = 1; i <= 5; i++) {
-            setupImagePreview('image_' + i, 'preview-' + i);
-        }
-
-        // Mobile menu toggle
-        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
-        const sidebar = document.querySelector('.sidebar');
-        
-        if (mobileMenuBtn && sidebar) {
-            mobileMenuBtn.addEventListener('click', () => {
-                sidebar.classList.toggle('active');
-            });
-
-            // Close sidebar when clicking outside on mobile
-            document.addEventListener('click', (e) => {
-                if (window.innerWidth < 900 && 
-                    sidebar.classList.contains('active') && 
-                    !sidebar.contains(e.target) && 
-                    !mobileMenuBtn.contains(e.target)) {
-                    sidebar.classList.remove('active');
-                }
-            });
-        }
-
-        // Form submission with Sweet Alert confirmation and validation
-        document.getElementById('submitBtn')?.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Form validation
-            const form = document.getElementById('propertyForm');
-            const requiredFields = [];
-            
-            // Check all required fields
-            const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
-            inputs.forEach(field => {
-                if (!field.value.trim()) {
-                    const label = form.querySelector(`label[for="${field.id}"]`);
-                    const fieldName = label ? label.textContent.replace(' *', '') : field.name;
-                    requiredFields.push(fieldName);
-                }
-            });
-            
-            // If there are missing required fields, show error alert
-            if (requiredFields.length > 0) {
-                let fieldsList = '';
-                requiredFields.forEach((field, index) => {
-                    fieldsList += `<li style="text-align: left; margin: 5px 0;">${field}</li>`;
-                });
-                
-                Swal.fire({
-                    title: 'Missing Required Fields',
-                    html: `
-                        <div style="text-align: left;">
-                            <p style="margin-bottom: 15px; color: #666;">Please fill in the following required fields:</p>
-                            <ul style="margin-left: 20px; color: #e74c3c; font-weight: 500;">
-                                ${fieldsList}
-                            </ul>
-                            <p style="margin-top: 15px; color: #666; font-size: 14px;">
-                                <i class="fas fa-info-circle"></i> 
-                                All fields marked with a red asterisk (*) are required.
-                            </p>
-                        </div>
-                    `,
-                    icon: 'error',
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'OK, I\'ll complete them',
-                    customClass: {
-                        popup: 'swal-wide'
-                    }
-                });
-                return;
-            }
-            
-            // If all fields are filled, proceed with confirmation
-            // First confirmation - Review reminder
-            Swal.fire({
-                title: 'Please Review Your Information',
-                html: `
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p style="margin-bottom: 15px; color: #666;">Please carefully review all the information you've entered:</p>
-                        <ul style="margin-left: 20px; color: #666;">
-                            <li>Property title and description</li>
-                            <li>Location and address details</li>
-                            <li>Pricing and lease terms</li>
-                            <li>Property features and amenities</li>
-                            <li>Images uploaded</li>
-                        </ul>
-                        <p style="margin-top: 15px; color: #e74c3c; font-weight: 600;">
-                            <i class="fas fa-exclamation-triangle"></i> 
-                            Important: Once submitted, you won't be able to edit this property until admin approval.
-                        </p>
-                    </div>
-                `,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Continue to Submit',
-                cancelButtonText: 'Let me review',
-                customClass: {
-                    popup: 'swal-wide'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Second confirmation - Final submission
-                    Swal.fire({
-                        title: 'Add This Property?',
-                        text: 'Are you sure you want to add this property to your listings?',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonColor: '#28a745',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, Add Property',
-                        cancelButtonText: 'Cancel'
-                    }).then((finalResult) => {
-                        if (finalResult.isConfirmed) {
-                            // Show loading
-                            Swal.fire({
-                                title: 'Adding Property...',
-                                text: 'Please wait while we process your request.',
-                                icon: 'info',
-                                allowOutsideClick: false,
-                                showConfirmButton: false,
-                                didOpen: () => {
-                                    Swal.showLoading();
-                                }
-                            });
+                        if (this.files && this.files[0]) {
+                            const file = this.files[0];
+                            const reader = new FileReader();
                             
-                            // Submit the form
-                            document.getElementById('propertyForm').submit();
+                            reader.onload = function(e) {
+                                const img = document.createElement('img');
+                                img.src = e.target.result;
+                                
+                                const previewItem = document.createElement('div');
+                                previewItem.className = 'preview-item';
+                                
+                                const removeBtn = document.createElement('button');
+                                removeBtn.className = 'remove-image';
+                                removeBtn.innerHTML = '×';
+                                removeBtn.onclick = function() {
+                                    preview.removeChild(previewItem);
+                                    input.value = '';
+                                };
+                                
+                                previewItem.appendChild(img);
+                                previewItem.appendChild(removeBtn);
+                                preview.appendChild(previewItem);
+                            }
+                            
+                            reader.readAsDataURL(file);
                         }
                     });
                 }
-            });
-        });
-        // Check for success parameter in URL and show SweetAlert
-document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('success') === '1') {
-        Swal.fire({
-            title: 'Success!',
-            text: 'Property added successfully! It will be available after admin approval.',
-            icon: 'success',
-            confirmButtonColor: '#3085d6',
-            confirmButtonText: 'OK'
-        }).then((result) => {
-            // Remove the success parameter from URL to prevent showing the alert again on refresh
-            if (window.history.replaceState) {
-                const newUrl = window.location.protocol + "//" + window.location.host + 
-                              window.location.pathname;
-                window.history.replaceState({path: newUrl}, '', newUrl);
             }
-        });
-    }
-
-        // Logout confirmation
-        document.getElementById('logoutLink').addEventListener('click', function(e) {
-            e.preventDefault();
-
-            Swal.fire({
-                title: 'Are you sure?',
-                text: 'You will be logged out from your account.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, log out',
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = '../auth/logout.php';
-                }
-            });
-        });
-
-        // Custom SweetAlert2 styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .swal-wide {
-                width: 600px !important;
+            
+            // Set up previews for all image inputs
+            setupImagePreview('main_image', 'main-preview');
+            for (let i = 1; i <= 5; i++) {
+                setupImagePreview('image_' + i, 'preview-' + i);
             }
-            .swal2-html-container {
-                font-size: 14px !important;
-            }
-        `;
-        document.head.appendChild(style);
 
-        // Show profile incomplete alert on page load if profile is not complete
-        <?php if (!$is_profile_complete): ?>
-        document.addEventListener('DOMContentLoaded', function() {
+            // Mobile menu toggle
+            const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+            const sidebar = document.querySelector('.sidebar');
+            
+            if (mobileMenuBtn && sidebar) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    sidebar.classList.toggle('active');
+                });
+
+                // Close sidebar when clicking outside on mobile
+                document.addEventListener('click', (e) => {
+                    if (window.innerWidth < 900 && 
+                        sidebar.classList.contains('active') && 
+                        !sidebar.contains(e.target) && 
+                        !mobileMenuBtn.contains(e.target)) {
+                        sidebar.classList.remove('active');
+                    }
+                });
+            }
+
+            // Form submission with Sweet Alert confirmation and validation
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Form validation
+                    const form = document.getElementById('propertyForm');
+                    const requiredFields = [];
+                    
+                    // Check all required fields
+                    const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
+                    inputs.forEach(field => {
+                        if (!field.value.trim()) {
+                            const label = form.querySelector(`label[for="${field.id}"]`);
+                            const fieldName = label ? label.textContent.replace(' *', '') : field.name;
+                            requiredFields.push(fieldName);
+                        }
+                    });
+                    
+                    // If there are missing required fields, show error alert
+                    if (requiredFields.length > 0) {
+                        let fieldsList = '';
+                        requiredFields.forEach((field, index) => {
+                            fieldsList += `<li style="text-align: left; margin: 5px 0;">${field}</li>`;
+                        });
+                        
+                        Swal.fire({
+                            title: 'Missing Required Fields',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p style="margin-bottom: 15px; color: #666;">Please fill in the following required fields:</p>
+                                    <ul style="margin-left: 20px; color: #e74c3c; font-weight: 500;">
+                                        ${fieldsList}
+                                    </ul>
+                                    <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                                        <i class="fas fa-info-circle"></i> 
+                                        All fields marked with a red asterisk (*) are required.
+                                    </p>
+                                </div>
+                            `,
+                            icon: 'error',
+                            confirmButtonColor: '#d33',
+                            confirmButtonText: 'OK, I\'ll complete them',
+                            customClass: {
+                                popup: 'swal-wide'
+                            }
+                        });
+                        return;
+                    }
+                    
+                    // If all fields are filled, proceed with confirmation
+                    // First confirmation - Review reminder
+                    Swal.fire({
+                        title: 'Please Review Your Information',
+                        html: `
+                            <div style="text-align: left; margin: 20px 0;">
+                                <p style="margin-bottom: 15px; color: #666;">Please carefully review all the information you've entered:</p>
+                                <ul style="margin-left: 20px; color: #666;">
+                                    <li>Property title and description</li>
+                                    <li>Location and address details</li>
+                                    <li>Pricing and lease terms</li>
+                                    <li>Property features and amenities</li>
+                                    <li>Images uploaded</li>
+                                </ul>
+                                <p style="margin-top: 15px; color: #e74c3c; font-weight: 600;">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    Important: Once submitted, you won't be able to edit this property until admin approval.
+                                </p>
+                            </div>
+                        `,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Continue to Submit',
+                        cancelButtonText: 'Let me review',
+                        customClass: {
+                            popup: 'swal-wide'
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            // Second confirmation - Final submission
+                            Swal.fire({
+                                title: 'Add This Property?',
+                                text: 'Are you sure you want to add this property to your listings?',
+                                icon: 'question',
+                                showCancelButton: true,
+                                confirmButtonColor: '#28a745',
+                                cancelButtonColor: '#d33',
+                                confirmButtonText: 'Yes, Add Property',
+                                cancelButtonText: 'Cancel'
+                            }).then((finalResult) => {
+                                if (finalResult.isConfirmed) {
+                                    // Show loading
+                                    Swal.fire({
+                                        title: 'Adding Property...',
+                                        text: 'Please wait while we process your request.',
+                                        icon: 'info',
+                                        allowOutsideClick: false,
+                                        showConfirmButton: false,
+                                        didOpen: () => {
+                                            Swal.showLoading();
+                                        }
+                                    });
+                                    
+                                    // Submit the form
+                                    form.submit();
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+
+            // Logout confirmation
+            const logoutLink = document.getElementById('logoutLink');
+            if (logoutLink) {
+                logoutLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: 'You will be logged out from your account.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, log out',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = '../auth/logout.php';
+                        }
+                    });
+                });
+            }
+
+            // Check for success parameter in URL and show SweetAlert
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('success') === '1') {
+                Swal.fire({
+                    title: 'Success!',
+                    text: 'Property added successfully! It will be available after admin approval.',
+                    icon: 'success',
+                    confirmButtonColor: '#3085d6',
+                    confirmButtonText: 'OK'
+                }).then((result) => {
+                    // Remove the success parameter from URL to prevent showing the alert again on refresh
+                    if (window.history.replaceState) {
+                        const newUrl = window.location.protocol + "//" + window.location.host + 
+                                      window.location.pathname;
+                        window.history.replaceState({path: newUrl}, '', newUrl);
+                    }
+                });
+            }
+
+            // Show profile incomplete alert on page load if profile is not complete
+            <?php if (!$is_profile_complete): ?>
             Swal.fire({
                 title: 'Profile Incomplete',
                 html: `
@@ -1603,9 +1612,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = 'profile_landlord.php';
                 }
             });
+            <?php endif; ?>
         });
-        
-        <?php endif; ?>
     </script>
 </body>
 </html>

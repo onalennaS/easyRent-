@@ -585,13 +585,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         </div>
         <ul>
             <li><a href="../index.php"><i class="fas fa-home"></i> Home</a></li>
+             <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
             <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+           
             <li><a href="browse_properties.php"><i class="fas fa-search"></i> Browse Properties</a></li>
             <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> My Applications</a></li>
             <li><a href="my_lease.php" class="active"><i class="fas fa-file-contract"></i> My Lease</a></li>
             <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
-            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
+            
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
