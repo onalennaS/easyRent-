@@ -5,25 +5,34 @@
  */
 
 class Database {
-    private $host = 'localhost';
-    private $db_name = 'easyrent_db';
-    private $username = 'root'; // Change this to your database username
-    private $password = '';     // Change this to your database password
+private $host = getenv('DB_HOST');
+private $db_name = getenv('DB_NAME');
+private $username = getenv('DB_USER');
+private $password = getenv('DB_PASS');
+
     private $conn;
 
     public function getConnection() {
         $this->conn = null;
         
         try {
+            $options = array(
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false
+            );
+            
+            // Add SSL configuration for cloud databases if needed
+            if (getenv('MYSQL_ATTR_SSL_CA')) {
+                $options[PDO::MYSQL_ATTR_SSL_CA] = getenv('MYSQL_ATTR_SSL_CA');
+                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
+
             $this->conn = new PDO(
                 "mysql:host=" . $this->host . ";dbname=" . $this->db_name . ";charset=utf8",
                 $this->username,
                 $this->password,
-                array(
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false
-                )
+                $options
             );
         } catch(PDOException $exception) {
             echo "Connection error: " . $exception->getMessage();
