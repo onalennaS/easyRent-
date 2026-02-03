@@ -251,17 +251,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Prepare success/error messages
                 $message_parts = [];
                 if (!empty($upload_success)) {
-                    $message_parts[] = "Profile updated successfully!";
+                    $message_parts[] = "Profile completed, you may now proceed with adding your property listing.";
                     $message_parts[] = "Documents uploaded: " . implode(", ", $upload_success);
                 }
                 if (!empty($upload_errors)) {
                     $message_parts[] = "Upload errors: " . implode("; ", $upload_errors);
                 }
-                
+
                 if (!$profile_complete) {
                     $message_parts[] = "Note: Complete your profile to start listing properties.";
                 }
-                
+
                 if (!empty($upload_errors) && empty($upload_success)) {
                     $error_message = implode(" ", $message_parts);
                 } else {
@@ -368,6 +368,16 @@ $profile_query = "SELECT * FROM landlord_profiles WHERE landlord_id = $landlord_
 $profile_result = mysqli_query($conn, $profile_query);
 if ($profile_result && mysqli_num_rows($profile_result) > 0) {
     $profile = mysqli_fetch_assoc($profile_result);
+}
+
+// Fetch email from users table if not set in profile
+if (empty($profile['email'])) {
+    $user_email_query = "SELECT email FROM users WHERE id = $landlord_id";
+    $user_email_result = mysqli_query($conn, $user_email_query);
+    if ($user_email_result && mysqli_num_rows($user_email_result) > 0) {
+        $user_email = mysqli_fetch_assoc($user_email_result)['email'];
+        $profile['email'] = $user_email;
+    }
 }
 
 // Get existing documents with error handling
@@ -1247,8 +1257,8 @@ $bank_branches = [
 
                             <div class="form-group">
                                 <label for="email" class="form-label required">Email Address</label>
-                                <input type="email" id="email" name="email" class="form-input" 
-                                       value="<?php echo htmlspecialchars($profile['email'] ?? ''); ?>" required>
+                                <input type="email" id="email" name="email" class="form-input"
+                                       value="<?php echo htmlspecialchars($profile['email'] ?? ''); ?>" required readonly>
                                 <div id="email_validation" class="validation-message"></div>
                             </div>
 
@@ -2114,7 +2124,9 @@ $bank_branches = [
                 title: 'Success!',
                 html: '<?php echo str_replace("'", "\\'", $success_message); ?>',
                 icon: 'success',
-                confirmButtonColor: '#10b981'
+                confirmButtonColor: '#10b981',
+                allowOutsideClick: false,
+                allowEscapeKey: false
             });
         <?php endif; ?>
 

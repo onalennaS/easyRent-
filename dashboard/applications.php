@@ -19,7 +19,7 @@ $landlord_id = $_SESSION['user_id'] ?? 1; // Fallback for testing
 
 // Get applications for this landlord's properties
 $applications_query = "
-    SELECT ra.*, p.title AS property_title, u.first_name, u.last_name, u.email, u.phone
+    SELECT ra.*, p.title AS property_title, p.rent_amount AS property_rent, u.first_name, u.last_name, u.email, u.phone
     FROM rental_applications ra
     JOIN properties p ON ra.property_id = p.id
     JOIN users u ON ra.tenant_id = u.id
@@ -37,38 +37,56 @@ if ($applications_result) {
 
 // Handle application status update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
-    $application_id = $_POST['application_id'];
-    $new_status = $_POST['status'];
-    
-    // Check if application is already approved
-    $check_query = "SELECT status FROM rental_applications WHERE id = $application_id";
+    $application_id = intval($_POST['application_id']);
+    $new_status = mysqli_real_escape_string($conn, $_POST['status']);
+
+    // Check if application exists and belongs to this landlord
+    $check_query = "
+        SELECT ra.status, p.landlord_id
+        FROM rental_applications ra
+        JOIN properties p ON ra.property_id = p.id
+        WHERE ra.id = $application_id
+    ";
     $check_result = mysqli_query($conn, $check_query);
-    
-    if ($check_result) {
+
+    if (!$check_result) {
+        $error_message = "Error checking application: " . mysqli_error($conn);
+    } elseif (mysqli_num_rows($check_result) === 0) {
+        $error_message = "Application not found.";
+    } else {
         $current_app = mysqli_fetch_assoc($check_result);
-        if ($current_app['status'] === 'approved') {
+
+        // Verify the application belongs to this landlord
+        if ($current_app['landlord_id'] != $landlord_id) {
+            $error_message = "You don't have permission to modify this application.";
+        } elseif ($current_app['status'] === 'approved') {
             $error_message = "This application has already been approved and cannot be modified.";
         } else {
             // Continue with existing logic
             $landlord_notes = mysqli_real_escape_string($conn, $_POST['landlord_notes'] ?? '');
-            
+
             // For non-approved statuses
             if ($new_status != 'approved') {
                 $update_query = "
-                    UPDATE rental_applications 
-                    SET status = '$new_status', 
+                    UPDATE rental_applications
+                    SET status = '$new_status',
                         landlord_notes = '$landlord_notes',
                         reviewed_at = NOW(),
                         reviewed_by = $landlord_id
                     WHERE id = $application_id
                 ";
-                
+
                 if (mysqli_query($conn, $update_query)) {
-                    $success_message = "Application status updated successfully!";
+                    // Verify the update was successful by checking affected rows
+                    if (mysqli_affected_rows($conn) > 0) {
+                        $success_message = "Application status updated to '" . ucfirst($new_status) . "' successfully!";
+                    } else {
+                        $error_message = "No changes were made to the application status.";
+                    }
                 } else {
                     $error_message = "Error updating application: " . mysqli_error($conn);
                 }
-            } 
+            }
             // For approved status
             else {
                 // Get application details
@@ -79,93 +97,101 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                     $error_message = "Error fetching application: " . mysqli_error($conn);
                 } else {
                     $application = mysqli_fetch_assoc($app_result);
-                    
-                    // Get monthly rent from form submission
-                    $monthly_rent = $_POST['monthly_rent'];
-                    
-                    // Validate monthly rent
-                    if (empty($monthly_rent) || !is_numeric($monthly_rent) || $monthly_rent <= 0) {
-                        $error_message = "Invalid monthly rent value. Please enter a valid rent amount.";
+
+                    // Get monthly rent from properties table
+                    $rent_query = "SELECT rent_amount FROM properties WHERE id = " . intval($application['property_id']);
+                    $rent_result = mysqli_query($conn, $rent_query);
+
+                    if (!$rent_result || mysqli_num_rows($rent_result) === 0) {
+                        $error_message = "Could not retrieve rent amount for this property.";
                     } else {
-                        // Update application status first
-                        $update_query = "
-                            UPDATE rental_applications 
-                            SET status = '$new_status', 
-                                landlord_notes = '$landlord_notes',
-                                reviewed_at = NOW(),
-                                reviewed_by = $landlord_id
-                            WHERE id = $application_id
-                        ";
-                        
-                        if (mysqli_query($conn, $update_query)) {
-                            // Validate and format move_in_date
-                            $move_in_date = $application['move_in_date'] ?? null;
-                            
-                            if ($move_in_date && strtotime($move_in_date)) {
-                                $move_in_date = date('Y-m-d', strtotime($move_in_date));
-                            } else {
-                                $move_in_date = date('Y-m-d', strtotime('+7 days'));
-                                $error_message = "Invalid move-in date detected. Using fallback date: " . date('M d, Y', strtotime($move_in_date));
-                            }
-                            
-                            // Calculate end date
-                            $end_date = date('Y-m-d', strtotime($move_in_date . " + {$application['lease_duration_months']} months"));
-                            
-                            // Create lease
-                            $stmt = $conn->prepare("
-                                INSERT INTO leases (
-                                    property_id, 
-                                    tenant_id, 
-                                    landlord_id,
-                                    application_id,
-                                    lease_start_date,
-                                    lease_end_date,
-                                    monthly_rent,
-                                    security_deposit,
-                                    status
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-                            ");
-                            
-                            // Bind parameters
-                            $stmt->bind_param(
-                                "iiiissdd", 
-                                $application['property_id'],
-                                $application['tenant_id'],
-                                $landlord_id,
-                                $application_id,
-                                $move_in_date,
-                                $end_date,
-                                $monthly_rent,  // Use rent from form
-                                $monthly_rent   // Security deposit = 1 month rent
-                            );
-                            
-                            if ($stmt->execute()) {
-                                $lease_id = $stmt->insert_id;
-                                $success_message = "Application approved and lease #$lease_id created!";
-                                
-                                // Send notification to tenant
-                                $tenant_id = $application['tenant_id'];
-                                $property_id = $application['property_id'];
-                                $message = "Your application for property #$property_id has been approved! Please sign your lease agreement.";
-                                
-                                $notif_query = "
-                                    INSERT INTO notifications (user_id, message, type, is_read, created_at)
-                                    VALUES ($tenant_id, '$message', 'application', 0, NOW())
-                                ";
-                                mysqli_query($conn, $notif_query);
-                            } else {
-                                $error_message = "Lease creation failed: " . $stmt->error;
-                            }
-                            $stmt->close();
+                        $property_data = mysqli_fetch_assoc($rent_result);
+                        $monthly_rent = $property_data['rent_amount'];
+
+                        // Validate monthly rent
+if (empty($monthly_rent) || !is_numeric($monthly_rent) || $monthly_rent <= 0) {
+                            $error_message = "Invalid rent amount found in property data.";
                         } else {
-                            $error_message = "Error updating application: " . mysqli_error($conn);
+                            // Update application status first
+                            $update_query = "
+                                UPDATE rental_applications 
+                                SET status = '$new_status', 
+                                    landlord_notes = '$landlord_notes',
+                                    reviewed_at = NOW(),
+                                    reviewed_by = $landlord_id
+                                WHERE id = $application_id
+                            ";
+                            
+                            if (mysqli_query($conn, $update_query)) {
+                                // Validate and format move_in_date
+                                $move_in_date = $application['move_in_date'] ?? null;
+                                
+                                if ($move_in_date && strtotime($move_in_date)) {
+                                    $move_in_date = date('Y-m-d', strtotime($move_in_date));
+                                } else {
+                                    $move_in_date = date('Y-m-d', strtotime('+7 days'));
+                                    $error_message = "Invalid move-in date detected. Using fallback date: " . date('M d, Y', strtotime($move_in_date));
+                                }
+                                
+                                // Calculate end date
+                                $end_date = date('Y-m-d', strtotime($move_in_date . " + {$application['lease_duration_months']} months"));
+                                
+                                // Create lease
+                                $stmt = $conn->prepare("
+                                    INSERT INTO leases (
+                                        property_id, 
+                                        tenant_id, 
+                                        landlord_id,
+                                        application_id,
+                                        lease_start_date,
+                                        lease_end_date,
+                                        monthly_rent,
+                                        security_deposit,
+                                        status
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                                ");
+                                
+                                // Bind parameters
+                                $stmt->bind_param(
+                                    "iiiissdd", 
+                                    $application['property_id'],
+                                    $application['tenant_id'],
+                                    $landlord_id,
+                                    $application_id,
+                                    $move_in_date,
+                                    $end_date,
+                                    $monthly_rent,  // Use rent from form
+                                    $monthly_rent   // Security deposit = 1 month rent
+                                );
+                                
+                                if ($stmt->execute()) {
+                                    $lease_id = $stmt->insert_id;
+                                    $success_message = "Application approved and lease #$lease_id created!";
+                                    
+                                    // Send notification to tenant
+                                    $tenant_id = $application['tenant_id'];
+                                    $property_id = $application['property_id'];
+                                    $message = "Your application for property #$property_id has been approved! Please sign your lease agreement.";
+                                    
+                                    $notif_query = "
+                                        INSERT INTO notifications (user_id, message, type, is_read, created_at)
+                                        VALUES ($tenant_id, '$message', 'application', 0, NOW())
+                                    ";
+                                    mysqli_query($conn, $notif_query);
+                                } else {
+                                    $error_message = "Lease creation failed: " . $stmt->error;
+                                }
+                                $stmt->close();
+                            } else {
+                                $error_message = "Error updating application: " . mysqli_error($conn);
+                            }
                         }
                     }
                 }
             }
         }
     }
-    
+
     // Refresh applications data
     $applications_result = mysqli_query($conn, $applications_query);
     $applications = [];
@@ -435,6 +461,11 @@ body {
     background-color: #f8fafc;
 }
 
+.applications-table tr.withdrawn-row {
+    background-color: #f9fafb;
+    opacity: 0.7;
+}
+
 .status-badge {
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
@@ -462,6 +493,11 @@ body {
 .status-reviewed {
     background: #dbeafe;
     color: #1e40af;
+}
+
+.status-withdrawn {
+    background: #e5e7eb;
+    color: #6b7280;
 }
 
 .tenant-info {
@@ -995,8 +1031,7 @@ textarea.form-control {
                 </thead>
                 <tbody>
                     <?php foreach ($applications as $app): ?>
-                        <tr>
-                           
+                        <tr class="<?php echo ($app['status'] === 'withdrawn') ? 'withdrawn-row' : ''; ?>">
                             <td><?php echo htmlspecialchars($app['property_title']); ?></td>
                             <td class="tenant-info">
                                 <span class="tenant-name"><?php echo htmlspecialchars($app['first_name'] . ' ' . $app['last_name']); ?></span>
@@ -1010,17 +1045,17 @@ textarea.form-control {
                                 </span>
                             </td>
                             <td class="application-actions">
-                                <button class="btn btn-info view-tenant-profile" 
+                                <button class="btn btn-info view-tenant-profile"
                                         data-id="<?php echo $app['tenant_id']; ?>"
                                         data-name="<?php echo htmlspecialchars($app['first_name'] . ' ' . $app['last_name']); ?>">
                                     <i class="fas fa-user"></i>
                                 </button>
-                                <?php if ($app['status'] === 'approved'): ?>
-                                    <button class="btn btn-secondary" disabled title="Application already approved">
+                                <?php if ($app['status'] === 'approved' || $app['status'] === 'withdrawn'): ?>
+                                    <button class="btn btn-secondary" disabled title="Application <?php echo $app['status'] === 'approved' ? 'already approved' : 'withdrawn'; ?>">
                                         <i class="fas fa-lock"></i>
                                     </button>
                                 <?php else: ?>
-                                    <button class="btn btn-warning update-status" data-id="<?php echo $app['id']; ?>">
+                                    <button class="btn btn-warning update-status" data-id="<?php echo $app['id']; ?>" data-property-id="<?php echo $app['property_id']; ?>">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                 <?php endif; ?>
@@ -1052,7 +1087,6 @@ textarea.form-control {
                     <label class="form-label">Status</label>
                     <select name="status" class="form-control" id="statusSelect" required>
                         <option value="pending">Pending</option>
-                        <option value="reviewed">Reviewed</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>
                     </select>
@@ -1202,7 +1236,8 @@ function closeModal() {
 updateButtons.forEach(button => {
     button.addEventListener('click', function() {
         const appId = this.getAttribute('data-id');
-        
+        const propertyId = this.getAttribute('data-property-id');
+
         // Check if button is disabled (for approved applications)
         if (this.disabled) {
             Swal.fire({
@@ -1213,13 +1248,28 @@ updateButtons.forEach(button => {
             });
             return;
         }
-        
+
         document.getElementById('statusApplicationId').value = appId;
-        
+
         // Reset form state
         rentInputGroup.style.display = 'none';
         statusSelect.value = 'pending';
-        
+
+        // Fetch property rent amount and populate if status is approved
+        if (propertyId) {
+            fetch(`get_property_rent.php?property_id=${propertyId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.rent_amount) {
+                        // Store rent amount for later use
+                        document.getElementById('statusModal').setAttribute('data-rent-amount', data.rent_amount);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching rent amount:', error);
+                });
+        }
+
         openModal('statusModal');
     });
 });
@@ -1362,8 +1412,16 @@ window.addEventListener('click', function(event) {
 statusSelect.addEventListener('change', function() {
     if (this.value === 'approved') {
         rentInputGroup.style.display = 'block';
+        // Populate rent amount from stored data
+        const modal = document.getElementById('statusModal');
+        const rentAmount = modal.getAttribute('data-rent-amount');
+        if (rentAmount) {
+            document.querySelector('input[name="monthly_rent"]').value = rentAmount;
+        }
     } else {
         rentInputGroup.style.display = 'none';
+        // Clear rent input when not approved
+        document.querySelector('input[name="monthly_rent"]').value = '';
     }
 });
 

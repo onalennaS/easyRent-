@@ -1,5 +1,5 @@
 <?php
-// browse_properties.php - FIXED IMAGE DISPLAY
+// browse_properties.php - Browse Properties Page
 
 session_start();
 
@@ -23,6 +23,36 @@ if (!$conn) {
 }
 
 $tenant_id = $_SESSION['user_id'];
+
+// Get tenant name from session or database
+$tenant_name = '';
+if (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
+    $tenant_name = $_SESSION['user_name'];
+} elseif (isset($_SESSION['username']) && !empty($_SESSION['username'])) {
+    $tenant_name = $_SESSION['username'];
+} elseif (isset($_SESSION['name']) && !empty($_SESSION['name'])) {
+    $tenant_name = $_SESSION['name'];
+} else {
+    // Fetch name from database if not in session
+    $user_query = "SELECT name, username, email FROM users WHERE id = ? AND user_type = 'tenant' LIMIT 1";
+    $stmt = mysqli_prepare($conn, $user_query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $tenant_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($row = mysqli_fetch_assoc($result)) {
+            $tenant_name = $row['name'] ?: $row['username'] ?: $row['email'];
+            // Store in session for future use
+            $_SESSION['user_name'] = $tenant_name;
+        }
+        mysqli_stmt_close($stmt);
+    }
+    
+    // Fallback if still no name found
+    if (empty($tenant_name)) {
+        $tenant_name = 'Tenant';
+    }
+}
 
 // Pre-fetch applied property IDs
 $applied_property_ids = [];
@@ -336,6 +366,24 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+        }
+
+        .tenant-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .tenant-info .avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
         }
 
         /* Filters */
@@ -752,7 +800,8 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
                 Browse Properties
             </h1>
             <div class="tenant-info">
-                <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Tenant'); ?></span>
+                <span>Hello, <?php echo htmlspecialchars($tenant_name); ?></span>
+                <div class="avatar"><?php echo strtoupper(substr($tenant_name ?? '', 0, 1)); ?></div>
             </div>
         </div>
 

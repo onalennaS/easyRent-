@@ -235,8 +235,7 @@ if (isset($_GET['success'])) {
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 16px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: #f8fafc;
             color: #1e293b;
             line-height: 1.6;
@@ -244,7 +243,7 @@ if (isset($_GET['success'])) {
             min-height: 100vh;
         }
 
-        /* Sidebar Styles */
+        /* Sidebar */
         .sidebar {
             width: 250px;
             background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
@@ -372,11 +371,48 @@ if (isset($_GET['success'])) {
             cursor: pointer;
         }
 
-        /* Page Header */
+        /* Hero Section */
+        .hero-section {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            color: white;
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="70" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+        }
+
         .page-header {
             background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
             border-radius: 20px;
-            padding: 2rem;
+            padding: 3rem 2rem;
             color: white;
             margin-bottom: 2rem;
             position: relative;
@@ -399,7 +435,7 @@ if (isset($_GET['success'])) {
         }
 
         .page-title-large {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: bold;
             margin-bottom: 0.5rem;
             display: flex;
@@ -408,7 +444,7 @@ if (isset($_GET['success'])) {
         }
 
         .page-subtitle {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             opacity: 0.9;
         }
 
@@ -416,7 +452,7 @@ if (isset($_GET['success'])) {
         .form-container {
             background: white;
             border-radius: 16px;
-            padding: 1.5rem;
+            padding: 2rem;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e5e7eb;
             margin-bottom: 1.5rem;
@@ -578,20 +614,27 @@ if (isset($_GET['success'])) {
             padding-left: 2.2rem;
         }
 
-        /* Buttons */
+        /* Button Styles */
         .btn {
-            padding: 0.6rem 1.5rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 10px;
-            border: none;
-            font-size: 0.85rem;
+            text-decoration: none;
+            font-size: 0.95rem;
             font-weight: 600;
-            cursor: pointer;
             transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
-            text-decoration: none;
+            gap: 0.5rem;
             justify-content: center;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .btn-primary {
@@ -600,19 +643,28 @@ if (isset($_GET['success'])) {
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            color: white;
         }
 
         .btn-secondary {
-            background: white;
-            color: #374151;
-            border: 2px solid #e5e7eb;
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            color: white;
         }
 
         .btn-secondary:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #059669 0%, #065f46 100%);
+            color: white;
         }
 
         .form-actions {
@@ -687,6 +739,12 @@ if (isset($_GET['success'])) {
         }
 
         /* Responsive Design */
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 900px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -735,11 +793,11 @@ if (isset($_GET['success'])) {
 
         @media (max-width: 640px) {
             .page-header {
-                padding: 1.5rem;
+                padding: 2rem 1.5rem;
             }
 
             .page-title-large {
-                font-size: 1.5rem;
+                font-size: 1.75rem;
             }
 
             .checkbox-group {

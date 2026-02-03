@@ -118,7 +118,8 @@ if ($has_status) {
    $recent_properties_query = "
     SELECT p.*, 
            COALESCE(u.full_name, u.name, u.first_name, u.username, 'Unknown') as landlord_name, 
-           u.username as landlord_username 
+           u.username as landlord_username,
+           (SELECT COUNT(*) FROM landlord_documents WHERE landlord_id = p.landlord_id AND (status = 'pending' OR status IS NULL)) as pending_documents_count
     FROM properties p 
     JOIN users u ON p.landlord_id = u.id 
     WHERE p.status = 'pending' 
@@ -130,7 +131,8 @@ if ($has_status) {
     $recent_properties_query = "
         SELECT p.*, 
                CONCAT(u.first_name, ' ', u.last_name) as landlord_name, 
-               u.email as landlord_email 
+               u.email as landlord_email,
+               (SELECT COUNT(*) FROM landlord_documents WHERE landlord_id = p.landlord_id AND (status = 'pending' OR status IS NULL)) as pending_documents_count
         FROM properties p 
         JOIN users u ON p.landlord_id = u.id 
         ORDER BY p.created_at DESC 
@@ -164,15 +166,76 @@ if (!$recent_landlords) {
     $recent_landlords = null;
 }
 
+// Function to check if landlord documents are approved
+function areLandlordDocumentsApproved($conn, $landlord_id) {
+    // Check if landlord_documents table exists
+    $check_table = "SHOW TABLES LIKE 'landlord_documents'";
+    $table_result = mysqli_query($conn, $check_table);
+    if (!$table_result || mysqli_num_rows($table_result) == 0) {
+        // If table doesn't exist, allow approval (backward compatibility)
+        return true;
+    }
+    
+    // Check if landlord has any documents
+    $doc_count_query = "SELECT COUNT(*) as doc_count FROM landlord_documents WHERE landlord_id = ?";
+    $doc_count_stmt = mysqli_prepare($conn, $doc_count_query);
+    mysqli_stmt_bind_param($doc_count_stmt, "i", $landlord_id);
+    mysqli_stmt_execute($doc_count_stmt);
+    $doc_count_result = mysqli_stmt_get_result($doc_count_stmt);
+    $doc_count = mysqli_fetch_assoc($doc_count_result)['doc_count'];
+    mysqli_stmt_close($doc_count_stmt);
+    
+    // If no documents uploaded, allow approval (landlord may not have uploaded yet)
+    if ($doc_count == 0) {
+        return true;
+    }
+    
+    // Check if all documents are approved (no pending documents)
+    $pending_query = "SELECT COUNT(*) as pending_count FROM landlord_documents 
+                      WHERE landlord_id = ? AND (status = 'pending' OR status IS NULL)";
+    $pending_stmt = mysqli_prepare($conn, $pending_query);
+    mysqli_stmt_bind_param($pending_stmt, "i", $landlord_id);
+    mysqli_stmt_execute($pending_stmt);
+    $pending_result = mysqli_stmt_get_result($pending_stmt);
+    $pending_count = mysqli_fetch_assoc($pending_result)['pending_count'];
+    mysqli_stmt_close($pending_stmt);
+    
+    // If there are pending documents, don't allow approval
+    return $pending_count == 0;
+}
+
 // Handle property approval/rejection (only if status column exists)
 if ($has_status && isset($_POST['approve_property'])) {
     $property_id = intval($_POST['property_id']);
-    $update_query = "UPDATE properties SET status = 'approved', approved_at = NOW() WHERE id = $property_id";
-    if (mysqli_query($conn, $update_query)) {
-        $_SESSION['success_message'] = "Property approved successfully!";
+    
+    // Get landlord_id from property
+    $get_landlord_query = "SELECT landlord_id FROM properties WHERE id = ?";
+    $get_landlord_stmt = mysqli_prepare($conn, $get_landlord_query);
+    mysqli_stmt_bind_param($get_landlord_stmt, "i", $property_id);
+    mysqli_stmt_execute($get_landlord_stmt);
+    $landlord_result = mysqli_stmt_get_result($get_landlord_stmt);
+    
+    if ($landlord_result && mysqli_num_rows($landlord_result) > 0) {
+        $property_data = mysqli_fetch_assoc($landlord_result);
+        $landlord_id = $property_data['landlord_id'];
+        mysqli_stmt_close($get_landlord_stmt);
+        
+        // Check if landlord documents are approved
+        if (!areLandlordDocumentsApproved($conn, $landlord_id)) {
+            $_SESSION['error_message'] = "Cannot approve property: The landlord has pending documents that need to be reviewed and approved first. Please review and approve/reject all landlord documents before approving this property.";
+        } else {
+            // Proceed with approval
+            $update_query = "UPDATE properties SET status = 'approved', approved_at = NOW() WHERE id = $property_id";
+            if (mysqli_query($conn, $update_query)) {
+                $_SESSION['success_message'] = "Property approved successfully!";
+            } else {
+                $_SESSION['error_message'] = "Error approving property: " . mysqli_error($conn);
+            }
+        }
     } else {
-        $_SESSION['error_message'] = "Error approving property: " . mysqli_error($conn);
+        $_SESSION['error_message'] = "Property not found.";
     }
+    
     header("Location: admin_dashboard.php");
     exit();
 }
@@ -723,12 +786,20 @@ if ($has_status && isset($_POST['reject_property'])) {
                             
                             <?php if ($has_status && ($property['status'] ?? 'pending') == 'pending'): ?>
                                 <div class="property-actions">
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
-                                        <button type="submit" name="approve_property" class="btn btn-approve">
-                                            <i class="fas fa-check"></i> Approve
+                                    <?php 
+                                    $has_pending_docs = isset($property['pending_documents_count']) && $property['pending_documents_count'] > 0;
+                                    if ($has_pending_docs): ?>
+                                        <button type="button" class="btn btn-warning" onclick="showDocumentWarning(<?php echo $property['id']; ?>, <?php echo $property['pending_documents_count']; ?>)">
+                                            <i class="fas fa-exclamation-triangle"></i> Documents Pending (<?php echo $property['pending_documents_count']; ?>)
                                         </button>
-                                    </form>
+                                    <?php else: ?>
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="property_id" value="<?php echo $property['id']; ?>">
+                                            <button type="submit" name="approve_property" class="btn btn-approve">
+                                                <i class="fas fa-check"></i> Approve
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                     
                                     <button type="button" class="btn btn-reject" onclick="openRejectModal(<?php echo $property['id']; ?>)">
                                         <i class="fas fa-times"></i> Reject
@@ -806,6 +877,29 @@ if ($has_status && isset($_POST['reject_property'])) {
     </div>
 
     <script>
+        function showDocumentWarning(propertyId, pendingCount) {
+            Swal.fire({
+                title: 'Cannot Approve Property',
+                html: `
+                    <div style="text-align: left;">
+                        <p style="margin-bottom: 15px; color: #666;">This property cannot be approved because the landlord has <strong>${pendingCount}</strong> pending document(s) that need to be reviewed first.</p>
+                        <p style="margin-bottom: 15px; color: #e74c3c; font-weight: 600;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Please review and approve/reject all landlord documents before approving this property.
+                        </p>
+                        <p style="color: #666; font-size: 14px;">
+                            <i class="fas fa-info-circle"></i> 
+                            This ensures the legitimacy of landlord documents before property approval.
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'OK',
+                width: '600px'
+            });
+        }
+        
         function openRejectModal(propertyId) {
             document.getElementById('reject_property_id').value = propertyId;
             document.getElementById('rejectModal').style.display = 'block';
