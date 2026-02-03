@@ -59,7 +59,6 @@ $approved_tenants_query = "
     LEFT JOIN leases l ON a.id = l.application_id
     WHERE p.landlord_id = $landlord_id
     AND a.status = 'approved'
-    AND (l.id IS NULL OR l.status != 'terminated')
     ORDER BY 
         u.last_name ASC,
         u.first_name ASC,
@@ -120,7 +119,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
     $end_date = mysqli_real_escape_string($conn, $_POST['end_date']);
     $rent_amount = floatval($_POST['rent_amount']);
     $deposit = floatval($_POST['deposit']);
-    $terms = mysqli_real_escape_string($conn, $_POST['terms']);
+    $additional_terms = $_POST['terms'];
+    $terms = mysqli_real_escape_string($conn, $additional_terms);
     
     // Get tenant_id from the application
     $tenant_id_query = "SELECT tenant_id FROM rental_applications WHERE id = $application_id";
@@ -152,7 +152,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
                     $app_details = mysqli_fetch_assoc($app_details_result);
                     $property_id = $app_details['property_id'];
                     $tenant_id = $app_details['tenant_id'];
-                    
+
+                    // Initialize variables
+                    $tenant_name = '';
+                    $landlord_name = '';
+                    $property_address = '';
+
+                    // Fetch tenant name from users table
+                    $tenant_query = "SELECT CONCAT(first_name, ' ', last_name) AS tenant_name FROM users WHERE id = $tenant_id";
+                    $tenant_result = mysqli_query($conn, $tenant_query);
+                    if ($tenant_result && mysqli_num_rows($tenant_result) > 0) {
+                        $tenant_data = mysqli_fetch_assoc($tenant_result);
+                        $tenant_name = mysqli_real_escape_string($conn, $tenant_data['tenant_name']);
+                    } else {
+                        $error_message = "Error: Could not find tenant information.";
+                    }
+
+                    // Fetch landlord name from users table
+                    $landlord_query = "SELECT CONCAT(first_name, ' ', last_name) AS landlord_name FROM users WHERE id = $landlord_id";
+                    $landlord_result = mysqli_query($conn, $landlord_query);
+                    if ($landlord_result && mysqli_num_rows($landlord_result) > 0) {
+                        $landlord_data = mysqli_fetch_assoc($landlord_result);
+                        $landlord_name = mysqli_real_escape_string($conn, $landlord_data['landlord_name']);
+                    }
+
+                    // Fetch property address
+                    $property_query = "SELECT address FROM properties WHERE id = $property_id";
+                    $property_result = mysqli_query($conn, $property_query);
+                    if ($property_result && mysqli_num_rows($property_result) > 0) {
+                        $property_data = mysqli_fetch_assoc($property_result);
+                        $property_address = mysqli_real_escape_string($conn, $property_data['address']);
+                    }
+
+                    // Fetch template content
+                    $template_query = "SELECT content FROM lease_templates WHERE id = $template_id";
+                    $template_result = mysqli_query($conn, $template_query);
+                    if ($template_result && mysqli_num_rows($template_result) > 0) {
+                        $template_data = mysqli_fetch_assoc($template_result);
+                        $template_content = $template_data['content'];
+
+                        // Replace placeholders
+                        $lease_content = str_replace('[TENANT_NAME]', $tenant_name, $template_content);
+                        $lease_content = str_replace('[LANDLORD_NAME]', $landlord_name ?? '', $lease_content);
+                        $lease_content = str_replace('[PROPERTY_ADDRESS]', $property_address ?? '', $lease_content);
+                        $lease_content = str_replace('[START_DATE]', $start_date, $lease_content);
+                        $lease_content = str_replace('[END_DATE]', $end_date, $lease_content);
+                        $lease_content = str_replace('[RENT_AMOUNT]', $rent_amount, $lease_content);
+                        $lease_content = str_replace('[DEPOSIT_AMOUNT]', $deposit, $lease_content);
+                        $lease_content = str_replace('[DATE]', date('Y-m-d'), $lease_content);
+
+                        // Append additional terms
+                        if (!empty($additional_terms)) {
+                            $lease_content .= "\n\nAdditional Terms:\n" . $additional_terms;
+                        }
+
+                        $lease_content = mysqli_real_escape_string($conn, $lease_content);
+                    } else {
+                        $error_message = "Error: Could not find template.";
+                    }
+
                     // Insert lease
                     $insert_query = "
                         INSERT INTO leases (
@@ -184,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
                     ";
                     
                     if (mysqli_query($conn, $insert_query)) {
-                        $_SESSION['success_message'] = "Lease agreement created successfully!";
+                        $_SESSION['success_message'] = "Lease agreement created successfully! You can now sign the lease.";
                         header("Location: " . $_SERVER['PHP_SELF']);
                         exit();
                     } else {
@@ -238,10 +296,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         file_put_contents($signature_filename, $signature_data);
         
         // Update lease in database
-        $update_query = "UPDATE leases SET 
-                        status = 'active', 
-                        signature_path = '$signature_filename', 
-                        signed_date = NOW() 
+        $update_query = "UPDATE leases SET
+                        status = 'active',
+                        signature_path = '$signature_filename',
+                        signed_at = NOW()
                         WHERE id = $lease_id";
         
         if (mysqli_query($conn, $update_query)) {
@@ -634,7 +692,7 @@ body {
     right: 0;
     bottom: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 1000;
+    z-index: 1001;
     align-items: center;
     justify-content: center;
     padding: 1rem;
@@ -1440,7 +1498,7 @@ body.note-fullscreen .modal {
                             
                             <!-- Lease Status Column -->
                             <td>
-                                <?php if ($application['lease_id']): ?>
+                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
                                     <span class="lease-status status-<?php echo $application['lease_status']; ?>">
                                         <?php echo ucfirst($application['lease_status']); ?>
                                     </span>
@@ -1451,7 +1509,7 @@ body.note-fullscreen .modal {
                             
                             <!-- Lease Period Column -->
                             <td>
-                                <?php if ($application['lease_id']): ?>
+                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
                                     <?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?> - 
                                     <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?>
                                 <?php else: ?>
@@ -1461,23 +1519,31 @@ body.note-fullscreen .modal {
                             
                             <!-- Rent Amount Column -->
                             <td>
-                                <?php if ($application['lease_id']): ?>
+                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
                                     R<?php echo number_format($application['monthly_rent']); ?>
                                 <?php else: ?>
                                     -
                                 <?php endif; ?>
                             </td>
                             
-                            <!-- Actions Column -->
+                            <!-- Actions Column - UPDATED VERSION -->
                             <td>
                                 <div class="table-actions">
-                                    <?php if ($application['lease_id']): ?>
+                                    <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
                                         <?php if ($application['lease_status'] == 'draft' || $application['lease_status'] == 'pending'): ?>
-                                            <button class="btn btn-sm btn-success sign-lease-btn" data-lease-id="<?php echo $application['lease_id']; ?>">
-                                                <i class="fas fa-signature"></i> Sign
+                                            <button class="btn btn-sm btn-secondary view-lease-btn" 
+                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
+                                                    onclick="window.open('view_lease.php?id=<?php echo $application['lease_id']; ?>', '_blank')">
+                                                <i class="fas fa-eye"></i> Preview
+                                            </button>
+                                            <button class="btn btn-sm btn-success sign-lease-btn" 
+                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
+                                                    data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
+                                                    data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
+                                                <i class="fas fa-signature"></i> Sign Lease
                                             </button>
                                         <?php elseif ($application['lease_status'] == 'active'): ?>
-                                            <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary">
+                                            <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary" target="_blank">
                                                 <i class="fas fa-file-alt"></i> View
                                             </a>
                                             <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary">
@@ -1496,7 +1562,7 @@ body.note-fullscreen .modal {
                                                 data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
                                                 data-application-id="<?php echo $application['application_id']; ?>"
                                                 data-tenant-id="<?php echo $tenant_info['id']; ?>">
-                                            <i class="fas fa-file-contract"></i> Create
+                                            <i class="fas fa-file-contract"></i> Create Lease
                                         </button>
                                     <?php endif; ?>
                                 </div>
@@ -1537,12 +1603,7 @@ body.note-fullscreen .modal {
                 <form id="leaseForm" method="POST">
                     <input type="hidden" name="create_lease" value="1">
                     <input type="hidden" id="application_id" name="application_id" value="">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Tenant</label>
-                        <input type="text" id="tenantName" class="form-control" readonly>
-                    </div>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Property</label>
                         <input type="text" id="propertyName" class="form-control" readonly>
@@ -1615,7 +1676,9 @@ body.note-fullscreen .modal {
                     <input type="hidden" id="signature" name="signature" value="">
                     
                     <div class="signature-instructions">
-                        <p>Please sign your name in the box below using your mouse or finger</p>
+                        <p><strong>Lease Details:</strong></p>
+                        <p id="signatureLeaseInfo"></p>
+                        <p style="margin-top: 1rem;">Please sign your name in the box below using your mouse or finger</p>
                     </div>
                     
                     <div class="signature-container">
@@ -1814,7 +1877,15 @@ const signaturePad = new SignaturePad(canvas, {
 document.querySelectorAll('.sign-lease-btn').forEach(button => {
     button.addEventListener('click', function() {
         const leaseId = this.getAttribute('data-lease-id');
+        const tenantName = this.getAttribute('data-tenant-name');
+        const propertyName = this.getAttribute('data-property-name');
+        
         document.getElementById('lease_id').value = leaseId;
+        document.getElementById('signatureLeaseInfo').innerHTML = `
+            <strong>Tenant:</strong> ${tenantName}<br>
+            <strong>Property:</strong> ${propertyName}
+        `;
+        
         openModal('signLeaseModal');
         
         // Resize canvas after modal is opened
@@ -1877,20 +1948,18 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                         confirmButtonText: 'OK'
                     });
                 } else {
-                    document.getElementById('tenantName').value = tenantName;
                     document.getElementById('propertyName').value = propertyName;
                     document.getElementById('application_id').value = applicationId;
-                    
+
                     openModal('createLeaseModal');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 // If there's an error with the check, still allow opening the modal
-                document.getElementById('tenantName').value = tenantName;
                 document.getElementById('propertyName').value = propertyName;
                 document.getElementById('application_id').value = applicationId;
-                
+
                 openModal('createLeaseModal');
             });
     });
@@ -1908,15 +1977,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                 document.getElementById('terminate_property_name').value = propertyName;
                 
                 openModal('terminateLeaseModal');
-            });
-        });
-        
-        // Sign lease buttons
-        document.querySelectorAll('.sign-lease-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const leaseId = this.getAttribute('data-lease-id');
-                document.getElementById('lease_id').value = leaseId;
-                openModal('signLeaseModal');
             });
         });
         
@@ -2057,12 +2117,11 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
     e.preventDefault(); // Always prevent default first
     
     const templateId = this.elements['template_id'].value;
-    const tenantName = document.getElementById('tenantName').value;
     const propertyName = document.getElementById('propertyName').value;
     const startDate = this.elements['start_date'].value;
     const endDate = this.elements['end_date'].value;
     const rentAmount = this.elements['rent_amount'].value;
-    
+
     // Validation
     if (!templateId) {
         Swal.fire({
@@ -2079,7 +2138,6 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
         title: 'Create Lease Agreement?',
         html: `
             <div style="text-align: left; margin: 1rem 0;">
-                <p><strong>Tenant:</strong> ${tenantName}</p>
                 <p><strong>Property:</strong> ${propertyName}</p>
                 <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
                 <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
@@ -2106,7 +2164,7 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
                     Swal.showLoading();
                 }
             });
-            
+
             // Submit the form normally - the redirect will handle the rest
             this.submit();
         }
