@@ -115,14 +115,31 @@ $inquiries_result = null;
 if ($has_inquiries_table) {
     $inquiries_query = "
         SELECT i.*, p.title as property_title, $name_coalesce as full_name, u.email
-        FROM inquiries i 
-        JOIN properties p ON i.property_id = p.id 
+        FROM inquiries i
+        JOIN properties p ON i.property_id = p.id
         JOIN users u ON i.tenant_id = u.id
-        WHERE p.landlord_id = $landlord_id 
-        ORDER BY i.created_at DESC 
+        WHERE p.landlord_id = $landlord_id
+        ORDER BY i.created_at DESC
         LIMIT 5
     ";
     $inquiries_result = mysqli_query($conn, $inquiries_query);
+}
+
+// Get pending applications for notification
+$pending_applications_query = "
+    SELECT ra.*, p.title as property_title, u.first_name, u.last_name
+    FROM rental_applications ra
+    JOIN properties p ON ra.property_id = p.id
+    JOIN users u ON ra.tenant_id = u.id
+    WHERE p.landlord_id = $landlord_id AND ra.status = 'pending'
+    ORDER BY ra.application_date DESC
+";
+$pending_applications_result = mysqli_query($conn, $pending_applications_query);
+$pending_applications = [];
+if ($pending_applications_result) {
+    while ($row = mysqli_fetch_assoc($pending_applications_result)) {
+        $pending_applications[] = $row;
+    }
 }
 ?>
 
@@ -328,19 +345,27 @@ if ($has_inquiries_table) {
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.3);
             color: white;
-            padding: 0.75rem 1.5rem;
+            padding: 0.875rem 1.75rem;
             border-radius: 12px;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 0.95rem;
             transition: all 0.3s ease;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.625rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .quick-action-btn:hover {
             background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .quick-action-btn i {
+            font-size: 1rem;
         }
 
         /* Stats Grid */
@@ -431,7 +456,7 @@ if ($has_inquiries_table) {
 
         .card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1.5rem;
             padding-bottom: 1rem;
@@ -562,6 +587,59 @@ if ($has_inquiries_table) {
     gap: 0.375rem; /* Reduced from 0.5rem */
 }
 
+/* Button Styles */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: white;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    color: white;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+    color: white;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #059669 0%, #065f46 100%);
+    color: white;
+}
+
 .property-actions .btn {
     padding: 0.4rem 0.75rem; /* Reduced padding */
     border-radius: 6px; /* Reduced from 8px */
@@ -576,6 +654,22 @@ if ($has_inquiries_table) {
     gap: 0.25rem;
     flex: 1; /* Make buttons equal width */
     justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.property-actions .btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.property-actions .btn-secondary {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    color: white;
+}
+
+.property-actions .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Responsive adjustments */
@@ -673,6 +767,23 @@ if ($has_inquiries_table) {
             font-size: 3rem;
             margin-bottom: 1rem;
             color: #cbd5e1;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+
+        .empty-state .btn {
+            margin-top: 1rem;
         }
 
         /* Responsive Design */
@@ -856,58 +967,7 @@ if ($has_inquiries_table) {
             </div>
         </div>
 
-        <!-- Statistics Grid -->
-        <div class="stats-grid">
-            <div class="stat-card properties">
-                <div class="stat-header">
-                    <div>
-                        <div class="stat-value"><?php echo number_format($stats['total_properties']); ?></div>
-                        <div class="stat-label">Total Properties</div>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-building"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stat-card income">
-                <div class="stat-header">
-                    <div>
-                        <div class="stat-value">R<?php echo number_format($stats['monthly_income']); ?></div>
-                        <div class="stat-label">Monthly Income</div>
-                    </div>
-                   <div class="stat-icon">
-    <span class="currency-symbol">R</span>
-</div>
-
-                </div>
-            </div>
-
-            <div class="stat-card maintenance">
-                <div class="stat-header">
-                    <div>
-                        <div class="stat-value"><?php echo number_format($stats['open_maintenance']); ?></div>
-                        <div class="stat-label">Open Maintenance</div>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-wrench"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stat-card pending">
-                <div class="stat-header">
-                    <div>
-                        <div class="stat-value"><?php echo number_format($stats['pending_properties']); ?></div>
-                        <div class="stat-label">Pending Approval</div>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+      
         <!-- Content Grid -->
         <div class="content-grid">
             <!-- Recent Properties -->
@@ -1077,13 +1137,43 @@ if ($has_inquiries_table) {
 
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', (e) => {
-            if (window.innerWidth < 900 && 
-                sidebar.classList.contains('active') && 
-                !sidebar.contains(e.target) && 
+            if (window.innerWidth < 900 &&
+                sidebar.classList.contains('active') &&
+                !sidebar.contains(e.target) &&
                 !mobileMenuBtn.contains(e.target)) {
                 sidebar.classList.remove('active');
             }
         });
+
+        // Show pending applications notification
+        <?php if (!empty($pending_applications)): ?>
+            const pendingCount = <?php echo count($pending_applications); ?>;
+            const propertyNames = <?php echo json_encode(array_column($pending_applications, 'property_title')); ?>;
+
+            let propertyList = '';
+            if (pendingCount === 1) {
+                propertyList = `<strong>${propertyNames[0]}</strong>`;
+            } else if (pendingCount === 2) {
+                propertyList = `<strong>${propertyNames[0]}</strong> and <strong>${propertyNames[1]}</strong>`;
+            } else {
+                propertyList = `<strong>${propertyNames[0]}</strong> and ${pendingCount - 1} other${pendingCount > 2 ? 's' : ''}`;
+            }
+
+            Swal.fire({
+                title: 'New Rental Applications!',
+                html: `You have ${pendingCount} new rental application${pendingCount > 1 ? 's' : ''} for ${propertyList}.<br><br>Check your applications to review them.`,
+                icon: 'info',
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'View Applications',
+                showCancelButton: true,
+                cancelButtonText: 'Later',
+                allowOutsideClick: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = 'applications.php';
+                }
+            });
+        <?php endif; ?>
     </script>
 </body>
 </html>

@@ -65,6 +65,33 @@ try {
         $images[] = $row;
     }
     
+    // Fetch property amenities
+    $amenities = [];
+    // Check if amenities table exists
+    $check_amenities_table = "SHOW TABLES LIKE 'amenities'";
+    $amenities_table_result = $conn->query($check_amenities_table);
+    
+    if ($amenities_table_result && $amenities_table_result->num_rows > 0) {
+        // Check if icon column exists
+        $check_icon_column = "SHOW COLUMNS FROM amenities LIKE 'icon'";
+        $icon_column_result = $conn->query($check_icon_column);
+        $has_icon = $icon_column_result && $icon_column_result->num_rows > 0;
+        
+        $amenitiesSql = "SELECT a.name" . ($has_icon ? ", a.icon" : "") . " FROM amenities a 
+                         INNER JOIN property_amenities pa ON a.id = pa.amenity_id 
+                         WHERE pa.property_id = ?";
+        $amenitiesStmt = $conn->prepare($amenitiesSql);
+        if ($amenitiesStmt) {
+            $amenitiesStmt->bind_param("i", $propertyId);
+            $amenitiesStmt->execute();
+            $amenitiesResult = $amenitiesStmt->get_result();
+            while ($amenity = $amenitiesResult->fetch_assoc()) {
+                $amenities[] = $amenity;
+            }
+            $amenitiesStmt->close();
+        }
+    }
+    
     // Check if user has already applied for this property
     $hasApplied = false;
     if ($userRole === 'tenant') {
@@ -98,11 +125,7 @@ function fileExists($path) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
         body {
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(30, 58, 138, 0.9)),
-                url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2073&q=80');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+            background: white;
             min-height: 100vh;
         }
 
@@ -113,10 +136,151 @@ function fileExists($path) {
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
         }
 
+        /* Navbar Styles from index.php */
         .navbar {
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Mobile Navigation Styles */
+        .mobile-nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-nav-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mobile-nav-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 300px;
+            max-width: 80%;
+            height: 100vh;
+            z-index: 100;
+            background: white;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .mobile-nav-container.open {
+            transform: translateX(0);
+        }
+
+        .mobile-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mobile-nav-content {
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+            background: white;
+        }
+
+        .mobile-nav-item {
+            display: block;
+            padding: 1rem 1.5rem;
+            color: #374151;
+            font-weight: 500;
+            border-bottom: 1px solid #f3f4f6;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .mobile-nav-item:hover {
+            background-color: #f9fafb;
+            color: #3b82f6;
+        }
+
+        .mobile-nav-user-section {
+            background: #f9fafb;
+            padding: 1rem 1.5rem;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .mobile-nav-username {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mobile-menu-btn {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 24px;
+            height: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .mobile-menu-btn span {
+            display: block;
+            height: 3px;
+            width: 100%;
+            background: #374151;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-btn.active span:nth-child(1) {
+            transform: rotate(45deg) translate(6px, 6px);
+        }
+
+        .mobile-menu-btn.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-btn.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(6px, -6px);
+        }
+
+        @media (min-width: 769px) {
+            .mobile-only {
+                display: none !important;
+            }
+            
+            .mobile-nav-container {
+                display: none !important;
+            }
+            
+            .mobile-menu-btn {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none !important;
+            }
+            
+            .mobile-menu-btn {
+                display: flex !important;
+            }
         }
 
         .btn-primary {
@@ -141,65 +305,234 @@ function fileExists($path) {
             transform: translateY(-2px);
         }
 
-        /* Reduced image gallery size */
-        .image-gallery {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 1rem;
-            height: 350px; /* Reduced from 500px */
+        /* Professional Image Gallery */
+        .property-image-gallery {
+            width: 100%;
         }
 
-        .main-image {
-            background-size: cover;
-            background-position: center;
+        .main-gallery-image {
+            position: relative;
+            width: 70%;
+            height: 300px;
             border-radius: 1rem;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            position: relative;
             overflow: hidden;
+            background: #f3f4f6;
+            margin: 0 auto 1rem auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
 
-        .main-image:hover {
-            transform: scale(1.02);
+        .main-gallery-image img {
+            width: auto;
+            max-width: 80%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.3s ease, opacity 0.5s ease;
+            animation: fadeIn 0.5s ease-in-out;
         }
 
-        .thumbnail-grid {
-            display: grid;
-            grid-template-rows: repeat(2, 1fr);
-            gap: 1rem;
-        }
-
-        .thumbnail {
-            background-size: cover;
-            background-position: center;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .thumbnail:hover {
+        .main-gallery-image img:hover {
             transform: scale(1.05);
         }
 
-        .thumbnail.more-images {
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .animate-fadeInUp {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .animate-slideInLeft {
+            animation: slideInLeft 0.6s ease-out;
+        }
+
+        .animate-slideInRight {
+            animation: slideInRight 0.6s ease-out;
+        }
+
+        .animation-delay-200 {
+            animation-delay: 0.2s;
+        }
+
+        .image-counter {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
             background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .gallery-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .gallery-arrow:hover {
+            background: white;
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .gallery-arrow-prev {
+            left: 1rem;
+        }
+
+        .gallery-arrow-next {
+            right: 1rem;
+        }
+
+        .gallery-arrow i {
+            color: #1e40af;
+            font-size: 1.25rem;
+        }
+
+        .thumbnail-strip {
+            display: flex;
+            gap: 0.75rem;
+            overflow-x: auto;
+            padding: 0.5rem 0;
+            scrollbar-width: thin;
+        }
+
+        .thumbnail-strip::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .thumbnail-strip::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .thumbnail-strip::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .thumbnail-strip::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .thumbnail-item {
+            flex-shrink: 0;
+            width: 120px;
+            height: 80px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .thumbnail-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .thumbnail-item.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        .thumbnail-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumbnail-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
         }
 
         /* Fallback for missing images */
         .image-placeholder {
             background: linear-gradient(135deg, #e5e7eb, #d1d5db);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             color: #6b7280;
             font-size: 1.2rem;
+            width: 100%;
+            height: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .main-gallery-image {
+                height: 300px;
+            }
+
+            .thumbnail-item {
+                width: 100px;
+                height: 70px;
+            }
+
+            .gallery-arrow {
+                width: 40px;
+                height: 40px;
+            }
         }
 
         .feature-item {
@@ -430,6 +763,12 @@ function fileExists($path) {
 }
 
         /* Keep all other existing styles */
+
+        .footer {
+            background: black;
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
     </style>
     <style>
 /* Add this to your existing style section */
@@ -524,31 +863,118 @@ function fileExists($path) {
 }
 </style>
 </head>
-<!-- Navigation -->
-  <nav class="fixed w-full top-0 z-50 bg-gradient-to-r from-blue-900 to-blue-600 shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center h-16">
-        <!-- Logo & Name -->
-        <a href="index.php" class="flex items-center space-x-3">
-         
-          <div>
-            <h1 class="text-xl font-bold text-white">EasyRent</h1>
-            <p class="text-xs text-blue-200">Property Management</p>
-          </div>
-        </a>
-        <!-- Back Link & User -->
-        <div class="flex items-center space-x-6">
-          <a href="../index.php" class="flex items-center text-white hover:text-blue-200 transition">
-            <i class="fas fa-arrow-left mr-2"></i> Back to Properties
-          </a>
-          <div class="flex items-center space-x-2 text-white">
-            <i class="fas fa-user-circle text-2xl"></i>
-            <span><?php echo htmlspecialchars($username); ?></span>
-          </div>
+<!-- Mobile Navigation Overlay -->
+    <div id="mobileNavOverlay" class="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+
+    <!-- Mobile Navigation -->
+    <div id="mobileNavContainer" class="mobile-nav-container">
+        <div class="mobile-nav-header">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">EasyRent</h1>
+                <p class="text-xs text-blue-600">Property Management</p>
+            </div>
+            <button onclick="closeMobileNav()" class="text-gray-700 hover:text-red-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
         </div>
-      </div>
+        
+        <div class="mobile-nav-content">
+            <!-- Main Navigation Links -->
+            <a href="../index.php" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-home mr-3"></i>Home
+            </a>
+            <a href="../index.php#properties" class="mobile-nav-item" onclick="closeMobileNav()">
+                <i class="fas fa-building mr-3"></i>Properties
+            </a>
+            <?php if($isLoggedIn): ?>
+            <div class="mobile-nav-user-section">
+                <div class="mobile-nav-username">
+                    <i class="fas fa-user-circle mr-2"></i>
+                    <?php echo htmlspecialchars($username); ?>
+                </div>
+                <a href="<?php echo $userRole === 'tenant' ? 'tenant_dashboard.php' : 'landlord_dashboard.php'; ?>" class="mobile-nav-item" onclick="closeMobileNav()">
+                    <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
+                </a>
+                <a href="#" onclick="confirmLogout(); return false;" class="mobile-nav-item text-red-600 hover:bg-red-50">
+                    <i class="fas fa-sign-out-alt mr-3"></i>Logout
+                </a>
+            </div>
+            <?php else: ?>
+            <div class="mobile-nav-user-section">
+                <a href="../auth/login.php" class="block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold mb-3 hover:bg-blue-700 transition-colors" onclick="closeMobileNav()">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                </a>
+                <a href="../auth/register.php" class="block w-full text-center border-2 border-blue-600 text-blue-600 py-3 px-4 rounded-lg font-semibold hover:bg-blue-50 transition-colors" onclick="closeMobileNav()">
+                    <i class="fas fa-user-plus mr-2"></i>Register
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
     </div>
-  </nav>
+
+    <!-- Desktop Navigation -->
+    <nav class="navbar fixed w-full top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="../index.php" class="flex items-center">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">EasyRent</h1>
+                            <p class="text-xs text-blue-600">Property Management</p>
+                        </div>
+                    </a>
+                </div>
+                
+                <!-- Desktop Navigation Links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="../index.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Home</a>
+                    <a href="../index.php#properties" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Properties</a>
+                    <a href="../index.php#about" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">About</a>
+                    <a href="../index.php#contact" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">Contact</a>
+                    
+                    <!-- Show Dashboard link when logged in -->
+                    <?php if($isLoggedIn): ?>
+                    <a href="<?php echo $userRole === 'tenant' ? 'tenant_dashboard.php' : 'landlord_dashboard.php'; ?>" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold">
+                        <i class="fas fa-tachometer-alt mr-2"></i><?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
+                    </a>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Desktop User Section -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <?php if(!$isLoggedIn): ?>
+                    <!-- Guest Links -->
+                    <div class="flex items-center space-x-4">
+                        <a href="../auth/login.php" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                            <i class="fas fa-sign-in-alt mr-2"></i>Login
+                        </a>
+                        <a href="../auth/register.php" class="btn-primary px-4 py-2 rounded-lg text-white font-semibold">
+                            <i class="fas fa-user-plus mr-2"></i>Register
+                        </a>
+                    </div>
+                    <?php else: ?>
+                    <!-- Logged In Links -->
+                    <div class="flex items-center space-x-4">
+                        <a href="#" class="text-gray-700 hover:text-blue-600 transition-colors font-medium" 
+                           onclick="confirmLogout(); return false;">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center">
+                    <button onclick="toggleMobileNav()" class="mobile-menu-btn" id="mobileMenuBtn">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
 
   <!-- Main Content -->
   <main class="pt-24 pb-12">
@@ -560,69 +986,89 @@ function fileExists($path) {
         </div>
       <?php else: ?>
 
-        <!-- Property Header -->
-        <div class="bg-white shadow rounded-2xl p-6 mb-6">
-          <div class="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h1 class="text-3xl font-bold"><?php echo htmlspecialchars($property['title']); ?></h1>
-              <p class="flex items-center text-lg text-gray-600 mt-2">
-                <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>
-                <?php echo htmlspecialchars($property['address']); ?>
-              </p>
-            </div>
-            <div class="flex flex-col items-end">
-              <span class="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">Available</span>
-              <div class="text-3xl font-bold text-blue-600">
-                R<?php echo number_format($property['rent_amount']); ?>/month
-              </div>
-            </div>
-          </div>
-        </div>
-
-       <!-- Property Images -->
+       <!-- Property Header and Images - Combined Container -->
 <div class="bg-white shadow rounded-2xl p-6 mb-6">
-    <h2 class="text-2xl font-bold mb-4">Property Images</h2>
+    <!-- Property Header -->
+    <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6 animate-fadeInUp">
+      <div>
+        <h1 class="text-2xl font-bold animate-slideInLeft"><?php echo htmlspecialchars($property['title']); ?></h1>
+        <p class="flex items-center text-base text-gray-600 mt-2 animate-slideInLeft animation-delay-200">
+          <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>
+          <?php echo htmlspecialchars($property['address']); ?>
+        </p>
+      </div>
+      <div class="flex flex-col items-end animate-slideInRight">
+        <span class="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">Available</span>
+        <div class="text-2xl font-bold text-green-600">
+          R<?php echo number_format($property['rent_amount']); ?>/month
+        </div>
+      </div>
+    </div>
+
+    <!-- Property Images - Professional Gallery -->
+    <h2 class="text-2xl font-bold mb-4 flex items-center">
+        <i class="fas fa-images text-blue-500 mr-3"></i>
+        Property Images
+        <?php if (!empty($images)): ?>
+            <span class="ml-2 text-sm font-normal text-gray-500">(<?php echo count($images); ?> <?php echo count($images) == 1 ? 'image' : 'images'; ?>)</span>
+        <?php endif; ?>
+    </h2>
     <?php if (!empty($images)): ?>
-        <?php if (count($images) >= 3): ?>
-            <!-- Slideshow for 3+ images -->
-            <div class="image-gallery" id="propertyGallery">
-                <div class="gallery-slideshow">
+        <div class="property-image-gallery">
+            <!-- Main Large Image -->
+            <div class="main-gallery-image">
+                <?php 
+                $mainImage = $images[0];
+                $isUrl = strpos($mainImage['image_url'], 'http') === 0;
+                $imagePath = $isUrl ? $mainImage['image_url'] : '../uploads/properties/' . $mainImage['image_url'];
+                ?>
+                <img src="<?php echo $imagePath; ?>" 
+                     alt="Main property image" 
+                     id="mainGalleryImage"
+                     onclick="openModal(0)"
+                     class="cursor-pointer"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'800\' height=\'500\'%3E%3Crect fill=\'%23e5e7eb\' width=\'800\' height=\'500\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%236b7280\' font-family=\'Arial\' font-size=\'20\'%3EImage not available%3C/text%3E%3C/svg%3E';">
+                
+                <!-- Image Counter -->
+                <div class="image-counter">
+                    <span id="currentImageIndex">1</span> / <?php echo count($images); ?>
+                </div>
+                
+                <!-- Navigation Arrows -->
+                <?php if (count($images) > 1): ?>
+                    <button class="gallery-arrow gallery-arrow-prev" onclick="changeMainImage(-1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="gallery-arrow gallery-arrow-next" onclick="changeMainImage(1)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Thumbnail Strip -->
+            <?php if (count($images) > 1): ?>
+                <div class="thumbnail-strip">
                     <?php foreach ($images as $index => $image): ?>
-                        <div class="gallery-slide">
-                            <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
-                                 alt="Property image <?php echo $index + 1; ?>"
-                                 onclick="openModal(<?php echo $index; ?>)">
+                        <?php 
+                        $isUrl = strpos($image['image_url'], 'http') === 0;
+                        $thumbSrc = $isUrl ? $image['image_url'] : '../uploads/properties/' . $image['image_url'];
+                        ?>
+                        <div class="thumbnail-item <?php echo $index === 0 ? 'active' : ''; ?>" 
+                             onclick="setMainImage(<?php echo $index; ?>)"
+                             data-index="<?php echo $index; ?>">
+                            <img src="<?php echo $thumbSrc; ?>" 
+                                 alt="Thumbnail <?php echo $index + 1; ?>"
+                                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'thumbnail-placeholder\'><i class=\'fas fa-image\'></i></div>';">
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <button class="gallery-nav gallery-prev">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <button class="gallery-nav gallery-next">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                <div class="gallery-controls">
-                    <?php foreach ($images as $index => $image): ?>
-                        <button class="gallery-control <?php echo $index === 0 ? 'active' : ''; ?>" 
-                                data-index="<?php echo $index; ?>"></button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        <?php else: ?>
-            <!-- Grid for less than 3 images -->
-            <div class="image-grid">
-                <?php foreach ($images as $image): ?>
-                    <div class="grid-item">
-                        <img src="/easyrent-/uploads/properties/<?php echo $image['image_url']; ?>"
-                             alt="Property image"
-                             onclick="openModal(<?php echo array_search($image, $images); ?>)">
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+            <?php endif; ?>
+        </div>
     <?php else: ?>
-        <div class="flex justify-center items-center h-64 bg-gray-100 rounded-lg text-gray-500">
-            <i class="fas fa-image mr-2"></i> No Images Available
+        <div class="flex flex-col justify-center items-center h-64 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg text-gray-500">
+            <i class="fas fa-image text-6xl mb-4 text-gray-400"></i>
+            <p class="text-lg font-medium">No Images Available</p>
+            <p class="text-sm mt-2">Images will be displayed here once uploaded</p>
         </div>
     <?php endif; ?>
 </div>
@@ -637,42 +1083,132 @@ function fileExists($path) {
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
                   <i class="fas fa-bed text-2xl text-blue-500 mb-2"></i>
-                  <div class="font-semibold"><?php echo htmlspecialchars($property['bedrooms']); ?></div>
+                  <div class="font-semibold"><?php echo htmlspecialchars($property['bedrooms'] ?? 'N/A'); ?></div>
                   <div class="text-sm text-gray-600">Bedrooms</div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
                   <i class="fas fa-bath text-2xl text-blue-500 mb-2"></i>
-                  <div class="font-semibold"><?php echo htmlspecialchars($property['bathrooms']); ?></div>
+                  <div class="font-semibold"><?php echo htmlspecialchars($property['bathrooms'] ?? 'N/A'); ?></div>
                   <div class="text-sm text-gray-600">Bathrooms</div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
                   <i class="fas fa-expand-arrows-alt text-2xl text-blue-500 mb-2"></i>
-                  <div class="font-semibold"><?php echo htmlspecialchars($property['square_feet'] ?? 'N/A'); ?></div>
-                  <div class="text-sm text-gray-600">Sq Ft</div>
+                  <div class="font-semibold"><?php echo htmlspecialchars($property['square_meters'] ?? 'N/A'); ?> m²</div>
+                  <div class="text-sm text-gray-600">Square Meters</div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
                   <i class="fas fa-home text-2xl text-blue-500 mb-2"></i>
-                  <div class="font-semibold"><?php echo htmlspecialchars($property['property_type'] ?? 'N/A'); ?></div>
+                  <div class="font-semibold"><?php echo ucfirst(htmlspecialchars($property['property_type'] ?? 'N/A')); ?></div>
                   <div class="text-sm text-gray-600">Type</div>
                 </div>
               </div>
+              
               <h3 class="text-xl font-semibold mb-3">Description</h3>
-              <p class="text-gray-600 leading-relaxed">
-                <?php echo nl2br(htmlspecialchars($property['description'])); ?>
+              <p class="text-gray-600 leading-relaxed mb-6">
+                <?php echo nl2br(htmlspecialchars($property['description'] ?? 'No description available.')); ?>
               </p>
+
+              <!-- Location Details -->
+              <div class="border-t pt-6">
+                <h3 class="text-xl font-semibold mb-4">Location Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="flex items-start">
+                    <i class="fas fa-map-marker-alt text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">Address</div>
+                      <div class="text-gray-600"><?php echo htmlspecialchars($property['address'] ?? 'N/A'); ?></div>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-city text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">City</div>
+                      <div class="text-gray-600"><?php echo htmlspecialchars($property['city'] ?? 'N/A'); ?></div>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-map text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">State/Province</div>
+                      <div class="text-gray-600"><?php echo htmlspecialchars($property['state'] ?? 'N/A'); ?></div>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-mail-bulk text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">Postal Code</div>
+                      <div class="text-gray-600"><?php echo htmlspecialchars($property['postal_code'] ?? 'N/A'); ?></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Property Features -->
+              <div class="border-t pt-6 mt-6">
+                <h3 class="text-xl font-semibold mb-4">Property Features</h3>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div class="flex items-center">
+                    <i class="fas fa-<?php echo ($property['utilities_included'] ?? 0) ? 'check-circle text-green-500' : 'times-circle text-gray-400'; ?> mr-3"></i>
+                    <span class="text-gray-700">Utilities Included</span>
+                  </div>
+                  <div class="flex items-center">
+                    <i class="fas fa-<?php echo ($property['parking_available'] ?? 0) ? 'check-circle text-green-500' : 'times-circle text-gray-400'; ?> mr-3"></i>
+                    <span class="text-gray-700">Parking Available</span>
+                  </div>
+                  <div class="flex items-center">
+                    <i class="fas fa-<?php echo ($property['pet_friendly'] ?? 0) ? 'check-circle text-green-500' : 'times-circle text-gray-400'; ?> mr-3"></i>
+                    <span class="text-gray-700">Pet Friendly</span>
+                  </div>
+                  <div class="flex items-center">
+                    <i class="fas fa-<?php echo ($property['furnished'] ?? 0) ? 'check-circle text-green-500' : 'times-circle text-gray-400'; ?> mr-3"></i>
+                    <span class="text-gray-700">Furnished</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Availability & Lease -->
+              <div class="border-t pt-6 mt-6">
+                <h3 class="text-xl font-semibold mb-4">Availability & Lease Terms</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="flex items-start">
+                    <i class="fas fa-calendar-check text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">Available From</div>
+                      <div class="text-gray-600"><?php echo $property['available_from'] ? date('F j, Y', strtotime($property['available_from'])) : 'N/A'; ?></div>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-calendar-alt text-blue-500 mr-3 mt-1"></i>
+                    <div>
+                      <div class="font-semibold text-gray-700">Lease Duration</div>
+                      <div class="text-gray-600">
+                        <?php 
+                        $duration = $property['lease_duration_months'] ?? 0;
+                        if ($duration == 0) {
+                            echo 'Month-to-Month';
+                        } else {
+                            echo $duration . ' Month' . ($duration > 1 ? 's' : '');
+                        }
+                        ?>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <?php if (!empty($property['amenities'])): ?>
+            <?php if (!empty($amenities)): ?>
               <div class="bg-white shadow rounded-2xl p-6 mb-6">
-                <h2 class="text-2xl font-bold mb-4">Amenities & Features</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <?php foreach (explode(',', $property['amenities']) as $amenity): ?>
-                    <?php if (trim($amenity)): ?>
-                      <div class="flex items-center">
-                        <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                        <span><?php echo htmlspecialchars(trim($amenity)); ?></span>
-                      </div>
-                    <?php endif; ?>
+                <h2 class="text-2xl font-bold mb-4 flex items-center">
+                  <i class="fas fa-star text-yellow-500 mr-3"></i>
+                  Amenities & Features
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <?php foreach ($amenities as $amenity): ?>
+                    <div class="flex items-center p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
+                      <i class="fas fa-<?php echo htmlspecialchars($amenity['icon'] ?? 'check-circle'); ?> text-blue-500 mr-3 text-lg"></i>
+                      <span class="font-medium text-gray-700"><?php echo htmlspecialchars($amenity['name']); ?></span>
+                    </div>
                   <?php endforeach; ?>
                 </div>
               </div>
@@ -715,27 +1251,74 @@ function fileExists($path) {
               <?php endif; ?>
             </div>
 
+            <div class="bg-white shadow rounded-2xl p-6 mb-6">
+              <h3 class="text-xl font-bold mb-4">Pricing Information</h3>
+              <div class="space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b">
+                  <span class="text-gray-600">Monthly Rent:</span>
+                  <span class="font-bold text-blue-600 text-lg">R<?php echo number_format($property['rent_amount'] ?? 0, 2); ?></span>
+                </div>
+                <?php if (!empty($property['deposit_amount'])): ?>
+                  <div class="flex justify-between items-center pb-3 border-b">
+                    <span class="text-gray-600">Security Deposit:</span>
+                    <span class="font-semibold">R<?php echo number_format($property['deposit_amount'], 2); ?></span>
+                  </div>
+                <?php endif; ?>
+                <div class="pt-2">
+                  <div class="text-sm text-gray-500 mb-1">Total First Payment:</div>
+                  <div class="text-2xl font-bold text-green-600">
+                    R<?php echo number_format(($property['rent_amount'] ?? 0) + ($property['deposit_amount'] ?? 0), 2); ?>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="bg-white shadow rounded-2xl p-6">
               <h3 class="text-xl font-bold mb-4">Property Information</h3>
               <div class="space-y-3">
+                <div class="flex justify-between">
+                  <span class="text-gray-600">Property ID:</span>
+                  <span class="font-semibold">#<?php echo str_pad($property['id'], 6, '0', STR_PAD_LEFT); ?></span>
+                </div>
                 <div class="flex justify-between">
                   <span class="text-gray-600">Listed on:</span>
                   <span class="font-semibold"><?php echo date('M d, Y', strtotime($property['created_at'])); ?></span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-gray-600">Property ID:</span>
-                  <span class="font-semibold">#<?php echo str_pad($property['id'], 6, '0', STR_PAD_LEFT); ?></span>
+                  <span class="text-gray-600">Property Type:</span>
+                  <span class="font-semibold"><?php echo ucfirst(htmlspecialchars($property['property_type'] ?? 'N/A')); ?></span>
                 </div>
-                <?php if (!empty($property['lease_duration'])): ?>
+                <div class="flex justify-between">
+                  <span class="text-gray-600">Bedrooms:</span>
+                  <span class="font-semibold"><?php echo htmlspecialchars($property['bedrooms'] ?? 'N/A'); ?></span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-600">Bathrooms:</span>
+                  <span class="font-semibold"><?php echo htmlspecialchars($property['bathrooms'] ?? 'N/A'); ?></span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-600">Size:</span>
+                  <span class="font-semibold"><?php echo htmlspecialchars($property['square_meters'] ?? 'N/A'); ?> m²</span>
+                </div>
+                <?php if (!empty($property['lease_duration_months'])): ?>
                   <div class="flex justify-between">
                     <span class="text-gray-600">Lease Duration:</span>
-                    <span class="font-semibold"><?php echo htmlspecialchars($property['lease_duration']); ?></span>
+                    <span class="font-semibold">
+                      <?php 
+                      $duration = $property['lease_duration_months'];
+                      if ($duration == 0) {
+                          echo 'Month-to-Month';
+                      } else {
+                          echo $duration . ' Month' . ($duration > 1 ? 's' : '');
+                      }
+                      ?>
+                    </span>
                   </div>
                 <?php endif; ?>
-                <?php if (!empty($property['deposit_amount'])): ?>
+                <?php if (!empty($property['available_from'])): ?>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Security Deposit:</span>
-                    <span class="font-semibold">R<?php echo number_format($property['deposit_amount']); ?></span>
+                    <span class="text-gray-600">Available From:</span>
+                    <span class="font-semibold"><?php echo date('M d, Y', strtotime($property['available_from'])); ?></span>
                   </div>
                 <?php endif; ?>
               </div>
@@ -750,18 +1333,61 @@ function fileExists($path) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
    <script>
-// Image gallery functionality - FIXED
+// Image gallery functionality
 const images = <?php 
     $imageUrls = [];
     foreach ($images as $image) {
         if (!empty($image['image_url'])) {
-            $imageUrls[] = '/easyrent-/uploads/properties/' . $image['image_url'];
+            $isUrl = strpos($image['image_url'], 'http') === 0;
+            $imageUrls[] = $isUrl ? $image['image_url'] : '../uploads/properties/' . $image['image_url'];
         }
     }
     echo json_encode($imageUrls);
 ?>;
         
         let currentImageIndex = 0;
+
+        // Set main image from thumbnail
+        function setMainImage(index) {
+            if (!images || images.length === 0 || index < 0 || index >= images.length) {
+                return;
+            }
+            
+            currentImageIndex = index;
+            const mainImage = document.getElementById('mainGalleryImage');
+            const currentIndexSpan = document.getElementById('currentImageIndex');
+            
+            if (mainImage && images[index]) {
+                mainImage.src = images[index];
+            }
+            
+            if (currentIndexSpan) {
+                currentIndexSpan.textContent = index + 1;
+            }
+            
+            // Update active thumbnail
+            document.querySelectorAll('.thumbnail-item').forEach((thumb, i) => {
+                if (i === index) {
+                    thumb.classList.add('active');
+                } else {
+                    thumb.classList.remove('active');
+                }
+            });
+        }
+
+        // Change main image with arrows
+        function changeMainImage(direction) {
+            if (!images || images.length === 0) return;
+            
+            currentImageIndex += direction;
+            if (currentImageIndex >= images.length) {
+                currentImageIndex = 0;
+            } else if (currentImageIndex < 0) {
+                currentImageIndex = images.length - 1;
+            }
+            
+            setMainImage(currentImageIndex);
+        }
 
         function openModal(index) {
             if (!images || images.length === 0 || index >= images.length || !images[index]) {
@@ -997,51 +1623,139 @@ const images = <?php
                 }
             });
         }
-        // Slideshow functionality for properties with 3+ images
-const gallery = document.getElementById('propertyGallery');
-if (gallery) {
-    const slideshow = gallery.querySelector('.gallery-slideshow');
-    const slides = gallery.querySelectorAll('.gallery-slide');
-    const controls = gallery.querySelectorAll('.gallery-control');
-    const prevBtn = gallery.querySelector('.gallery-prev');
-    const nextBtn = gallery.querySelector('.gallery-next');
-    let currentSlide = 0;
-    
-    function showSlide(index) {
-        slideshow.style.transform = `translateX(-${index * 100}%)`;
-        
-        // Update controls
-        controls.forEach(control => control.classList.remove('active'));
-        controls[index].classList.add('active');
-        
-        currentSlide = index;
-    }
-    
-    // Navigation controls
-    prevBtn.addEventListener('click', () => {
-        const prevIndex = (currentSlide - 1 + slides.length) % slides.length;
-        showSlide(prevIndex);
-    });
-    
-    nextBtn.addEventListener('click', () => {
-        const nextIndex = (currentSlide + 1) % slides.length;
-        showSlide(nextIndex);
-    });
-    
-    // Dot controls
-    controls.forEach((control, index) => {
-        control.addEventListener('click', () => {
-            showSlide(index);
+        // Mobile Navigation Functions
+        function toggleMobileNav() {
+            const overlay = document.getElementById('mobileNavOverlay');
+            const container = document.getElementById('mobileNavContainer');
+            const btn = document.getElementById('mobileMenuBtn');
+            
+            if (overlay && container && btn) {
+                overlay.classList.toggle('show');
+                container.classList.toggle('open');
+                btn.classList.toggle('active');
+            }
+        }
+
+        function closeMobileNav() {
+            const overlay = document.getElementById('mobileNavOverlay');
+            const container = document.getElementById('mobileNavContainer');
+            const btn = document.getElementById('mobileMenuBtn');
+            
+            if (overlay && container && btn) {
+                overlay.classList.remove('show');
+                container.classList.remove('open');
+                btn.classList.remove('active');
+            }
+        }
+
+        // Close mobile nav when clicking overlay
+        document.addEventListener('click', function(event) {
+            const overlay = document.getElementById('mobileNavOverlay');
+            const container = document.getElementById('mobileNavContainer');
+            
+            if (overlay && container && event.target === overlay) {
+                closeMobileNav();
+            }
         });
-    });
-    
-    // Auto-advance slideshow every 5 seconds
-    setInterval(() => {
-        const nextIndex = (currentSlide + 1) % slides.length;
-        showSlide(nextIndex);
-    }, 5000);
-}
+
+        // Logout confirmation
+        function confirmLogout() {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'You will be logged out from your account.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, log out',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
+        }
     </script>
-    
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <div class="modal-content">
+            <img id="modalImage" class="modal-image" src="" alt="Property image">
+            <?php if (count($images) > 1): ?>
+                <button class="prev" onclick="changeImage(-1)">&#10094;</button>
+                <button class="next" onclick="changeImage(1)">&#10095;</button>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer py-12">
+        <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Company Info -->
+                <div class="col-span-1 md:col-span-2">
+                    <div class="flex items-center mb-4">
+                        <h1 class="text-2xl font-bold text-white">EasyRent</h1>
+                        <p class="text-xs text-blue-200 ml-2">Property Management</p>
+                    </div>
+                    <p class="text-gray-300 mb-4">
+                        Professional property management solutions for landlords and tenants. Making rental processes simple and efficient.
+                    </p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Quick Links -->
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Quick Links</h3>
+                    <ul class="space-y-2">
+                        <li><a href="../index.php" class="text-gray-300 hover:text-white transition-colors">Home</a></li>
+                        <li><a href="../index.php#properties" class="text-gray-300 hover:text-white transition-colors">Properties</a></li>
+                        <li><a href="../index.php#about" class="text-gray-300 hover:text-white transition-colors">About Us</a></li>
+                        <li><a href="../index.php#contact" class="text-gray-300 hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+
+                <!-- Services -->
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Services</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-300 hover:text-white transition-colors">Property Listing</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-white transition-colors">Tenant Screening</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-white transition-colors">Lease Management</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-white transition-colors">Maintenance</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Bottom Bar -->
+            <div class="border-t border-gray-700 mt-8 pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <p class="text-gray-400 text-sm">
+                        &copy; <?php echo date('Y'); ?> EasyRent. All rights reserved.
+                    </p>
+                    <div class="flex space-x-6 mt-4 md:mt-0">
+                        <a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Privacy Policy</a>
+                        <a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Terms of Service</a>
+                        <a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Cookie Policy</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
 </body>
 </html>

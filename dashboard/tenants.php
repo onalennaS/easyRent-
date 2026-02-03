@@ -23,6 +23,12 @@ if (!$conn) {
 // Get landlord ID from session
 $landlord_id = (int)$_SESSION['user_id'];
 
+// Check for session success message
+if (isset($_SESSION['success_message'])) {
+    $success_message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+
 // Fetch approved tenants with lease information - updated to include all approved applications
 // Fetch approved tenants with lease information - updated to include all approved applications
 $approved_tenants_query = "
@@ -124,12 +130,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
         $tenant_data = mysqli_fetch_assoc($tenant_id_result);
         $tenant_id = $tenant_data['tenant_id'];
         
-        // Check if this tenant already has any draft leases
-        $check_draft_query = "SELECT id FROM leases WHERE tenant_id = $tenant_id AND status = 'draft'";
+        // Check if this tenant already has any draft or pending leases
+        $check_draft_query = "SELECT id FROM leases WHERE tenant_id = $tenant_id AND status IN ('draft', 'pending')";
         $check_draft_result = mysqli_query($conn, $check_draft_query);
         
         if ($check_draft_result && mysqli_num_rows($check_draft_result) > 0) {
-            $error_message = "This tenant already has a draft lease agreement. Please sign or cancel the existing lease before creating a new one.";
+            $error_message = "This tenant already has a pending lease agreement. Please sign or cancel the existing lease before creating a new one.";
         } else {
             // Check if this application already has an active lease
             $check_lease_query = "SELECT id FROM leases WHERE application_id = $application_id AND status != 'terminated'";
@@ -173,20 +179,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
                             $rent_amount, 
                             $deposit, 
                             '$terms', 
-                            'draft'
+                            'pending'
                         )
                     ";
                     
                     if (mysqli_query($conn, $insert_query)) {
-                        $success_message = "Lease agreement created successfully!";
-                        // Refresh tenants data
-                        $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
-                        $approved_tenants = [];
-                        if ($approved_tenants_result) {
-                            while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
-                                $approved_tenants[] = $row;
-                            }
-                        }
+                        $_SESSION['success_message'] = "Lease agreement created successfully!";
+                        header("Location: " . $_SERVER['PHP_SELF']);
+                        exit();
                     } else {
                         $error_message = "Error creating lease: " . mysqli_error($conn);
                     }
@@ -209,15 +209,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_template'])) {
                      VALUES ($landlord_id, '$template_name', '$content')";
     
     if (mysqli_query($conn, $insert_query)) {
-        $success_message = "Lease template created successfully!";
-        // Refresh templates data
-        $templates_result = mysqli_query($conn, $templates_query);
-        $templates = [];
-        if ($templates_result) {
-            while ($row = mysqli_fetch_assoc($templates_result)) {
-                $templates[] = $row;
-            }
-        }
+        $_SESSION['success_message'] = "Lease template created successfully!";
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
     } else {
         $error_message = "Error creating template: " . mysqli_error($conn);
     }
@@ -251,15 +245,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                         WHERE id = $lease_id";
         
         if (mysqli_query($conn, $update_query)) {
-            $success_message = "Lease agreement signed and activated successfully!";
-            // Refresh tenants data
-            $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
-            $approved_tenants = [];
-            if ($approved_tenants_result) {
-                while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
-                    $approved_tenants[] = $row;
-                }
-            }
+            $_SESSION['success_message'] = "Lease agreement signed and activated successfully!";
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
         } else {
             $error_message = "Error signing lease: " . mysqli_error($conn);
         }
@@ -282,42 +270,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
                     WHERE id = $lease_id AND landlord_id = $landlord_id";
     
     if (mysqli_query($conn, $update_query)) {
-        $success_message = "Lease agreement terminated successfully!";
-        // Refresh tenants data
-        $approved_tenants_result = mysqli_query($conn, $approved_tenants_query);
-        $approved_tenants = [];
-        if ($approved_tenants_result) {
-            while ($row = mysqli_fetch_assoc($approved_tenants_result)) {
-                $approved_tenants[] = $row;
-            }
-        }
+        $_SESSION['success_message'] = "Lease agreement terminated successfully!";
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
     } else {
         $error_message = "Error terminating lease: " . mysqli_error($conn);
-    }
-}
-// Add this after your form processing logic, right after successful lease creation
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
-    // ... your existing lease creation code ...
-    
-    if (mysqli_query($conn, $insert_query)) {
-        // Instead of setting $success_message, output JSON for AJAX
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'message' => 'Lease agreement created successfully!']);
-            exit();
-        } else {
-            $success_message = "Lease agreement created successfully!";
-            // Add a meta refresh as fallback
-            echo '<script>setTimeout(function(){ window.location.reload(); }, 2000);</script>';
-        }
-    } else {
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'message' => 'Error creating lease: ' . mysqli_error($conn)]);
-            exit();
-        } else {
-            $error_message = "Error creating lease: " . mysqli_error($conn);
-        }
     }
 }
 ?>
@@ -1148,11 +1105,11 @@ textarea.form-control {
     .modal-body {
         padding: 1rem;
     }
-    
+
     .form-group {
         margin-bottom: 1.2rem;
     }
-    
+
     .template-preview {
         padding: 1rem;
     }
@@ -1172,6 +1129,130 @@ textarea.form-control {
 
     .signature-actions {
         flex-direction: column;
+    }
+}
+
+/* ============================================
+   ENHANCED SUMMERNOTE FULLSCREEN MODE
+   ============================================ */
+
+/* White background for fullscreen body */
+body.note-fullscreen {
+    background: white !important;
+    overflow: hidden !important;
+}
+
+/* Fullscreen editor container */
+.note-editor.note-frame.fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: white !important;
+    z-index: 99999 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+
+/* Fullscreen toolbar styling */
+.note-editor.note-frame.fullscreen .note-toolbar {
+    background: #f8f9fa !important;
+    border-bottom: 2px solid #dee2e6 !important;
+    padding: 0.75rem 1rem !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* Fullscreen editable area with white background */
+.note-editor.note-frame.fullscreen .note-editable {
+    background: white !important;
+    color: #1e293b !important;
+    padding: 2rem 3rem !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+    font-size: 1rem !important;
+    line-height: 1.8 !important;
+}
+
+/* Fullscreen statusbar */
+.note-editor.note-frame.fullscreen .note-statusbar {
+    background: #f8f9fa !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* Hide other page elements in fullscreen mode */
+body.note-fullscreen .sidebar,
+body.note-fullscreen .top-bar,
+body.note-fullscreen .page-header,
+body.note-fullscreen .alert,
+body.note-fullscreen .empty-state {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Ensure modal content stays white in fullscreen */
+body.note-fullscreen .modal-content {
+    background: white !important;
+}
+
+/* Modal backdrop should be white in fullscreen */
+body.note-fullscreen .modal {
+    background: white !important;
+}
+
+/* Additional styling for better readability in fullscreen */
+.note-editor.note-frame.fullscreen .note-editable h1,
+.note-editor.note-frame.fullscreen .note-editable h2,
+.note-editor.note-frame.fullscreen .note-editable h3,
+.note-editor.note-frame.fullscreen .note-editable h4,
+.note-editor.note-frame.fullscreen .note-editable h5,
+.note-editor.note-frame.fullscreen .note-editable h6 {
+    color: #1e293b !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+}
+
+.note-editor.note-frame.fullscreen .note-editable p {
+    margin-bottom: 1rem !important;
+    color: #1e293b !important;
+}
+
+.note-editor.note-frame.fullscreen .note-editable ul,
+.note-editor.note-frame.fullscreen .note-editable ol {
+    margin-bottom: 1rem !important;
+    padding-left: 2rem !important;
+}
+
+/* Ensure buttons and controls are visible in fullscreen */
+.note-editor.note-frame.fullscreen .note-toolbar .btn,
+.note-editor.note-frame.fullscreen .note-toolbar button {
+    background: white !important;
+    border: 1px solid #dee2e6 !important;
+    color: #495057 !important;
+}
+
+.note-editor.note-frame.fullscreen .note-toolbar .btn:hover,
+.note-editor.note-frame.fullscreen .note-toolbar button:hover {
+    background: #e9ecef !important;
+}
+
+.note-editor.note-frame.fullscreen .note-toolbar .btn.active,
+.note-editor.note-frame.fullscreen .note-toolbar button.active {
+    background: #007bff !important;
+    color: white !important;
+}
+
+/* Print-friendly styling for fullscreen mode */
+@media print {
+    body.note-fullscreen .note-editor.note-frame.fullscreen .note-toolbar,
+    body.note-fullscreen .note-editor.note-frame.fullscreen .note-statusbar {
+        display: none !important;
+    }
+    
+    body.note-fullscreen .note-editor.note-frame.fullscreen .note-editable {
+        padding: 0 !important;
+        max-width: 100% !important;
     }
 }
     </style>
@@ -1391,7 +1472,7 @@ textarea.form-control {
                             <td>
                                 <div class="table-actions">
                                     <?php if ($application['lease_id']): ?>
-                                        <?php if ($application['lease_status'] == 'draft'): ?>
+                                        <?php if ($application['lease_status'] == 'draft' || $application['lease_status'] == 'pending'): ?>
                                             <button class="btn btn-sm btn-success sign-lease-btn" data-lease-id="<?php echo $application['lease_id']; ?>">
                                                 <i class="fas fa-signature"></i> Sign
                                             </button>
@@ -1704,7 +1785,6 @@ textarea.form-control {
             minDate: "today"
         });
 
-        // Initialize signature pad
         // Initialize signature pad with smooth settings
 const canvas = document.getElementById('signature-pad');
 
@@ -2027,53 +2107,8 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
                 }
             });
             
-            // Create FormData and submit via AJAX for better control
-            const formData = new FormData(this);
-            
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.text())
-            .then(data => {
-                // Close the loading dialog
-                Swal.close();
-                
-                // Check if submission was successful (you might need to adjust this based on your server response)
-                if (data.includes('Lease agreement created successfully')) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Success!',
-                        text: 'Lease agreement created successfully!',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
-                        // Refresh the page after success message
-                        window.location.reload();
-                    });
-                } else {
-                    // If there's an error, parse and show it
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(data, 'text/html');
-                    const errorElement = doc.querySelector('.alert-error');
-                    const errorMessage = errorElement ? errorElement.textContent.trim() : 'An error occurred while creating the lease.';
-                    
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error!',
-                        text: errorMessage
-                    });
-                }
-            })
-            .catch(error => {
-                Swal.close();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: 'An error occurred while creating the lease. Please try again.'
-                });
-                console.error('Error:', error);
-            });
+            // Submit the form normally - the redirect will handle the rest
+            this.submit();
         }
     });
 });

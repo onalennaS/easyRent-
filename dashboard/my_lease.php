@@ -1,4 +1,6 @@
 <?php
+// my_lease.php - My Lease Page
+
 session_start();
 
 // Check if user is logged in and is a tenant
@@ -22,9 +24,39 @@ if (!$conn) {
 
 $tenant_id = $_SESSION['user_id'];
 
+// Get tenant name from session or database
+$tenant_name = '';
+if (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
+    $tenant_name = $_SESSION['user_name'];
+} elseif (isset($_SESSION['username']) && !empty($_SESSION['username'])) {
+    $tenant_name = $_SESSION['username'];
+} elseif (isset($_SESSION['name']) && !empty($_SESSION['name'])) {
+    $tenant_name = $_SESSION['name'];
+} else {
+    // Fetch name from database if not in session
+    $user_query = "SELECT name, username, email FROM users WHERE id = ? AND user_type = 'tenant' LIMIT 1";
+    $stmt = mysqli_prepare($conn, $user_query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $tenant_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($row = mysqli_fetch_assoc($result)) {
+            $tenant_name = $row['name'] ?: $row['username'] ?: $row['email'];
+            // Store in session for future use
+            $_SESSION['user_name'] = $tenant_name;
+        }
+        mysqli_stmt_close($stmt);
+    }
+    
+    // Fallback if still no name found
+    if (empty($tenant_name)) {
+        $tenant_name = 'Tenant';
+    }
+}
+
 // Fetch lease information for the tenant
 $lease_query = "
-    SELECT 
+    SELECT
         l.*,
         p.title AS property_title,
         p.address AS property_address,
@@ -37,7 +69,7 @@ $lease_query = "
     FROM leases l
     JOIN properties p ON l.property_id = p.id
     JOIN users u ON l.landlord_id = u.id
-    WHERE l.tenant_id = $tenant_id
+    WHERE l.tenant_id = $tenant_id AND l.status = 'active'
     ORDER BY l.lease_start_date DESC
 ";
 
@@ -204,33 +236,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             min-height: 100vh;
         }
 
-        /* Header */
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+        /* Top Bar */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
         }
 
-        .header h1 {
-            color: #333;
-            font-size: 28px;
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
-        .header .tenant-info {
+        .tenant-info {
             display: flex;
             align-items: center;
             gap: 15px;
         }
 
-        .header .tenant-info .avatar {
+        .tenant-info .avatar {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -600,17 +633,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Header -->
-        <div class="header">
-            <button class="sidebar-toggle" onclick="toggleSidebar()">
-                <i class="fas fa-bars"></i>
-            </button>
-            <h1>My Lease Agreement</h1>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <h1 class="page-title">
+                <i class="fas fa-file-contract"></i>
+                My Lease Agreement
+            </h1>
             <div class="tenant-info">
-                <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Tenant'); ?></span>
-                <div class="avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'T', 0, 1)); ?>
-                </div>
+                <span>Hello, <?php echo htmlspecialchars($tenant_name); ?></span>
+                <div class="avatar"><?php echo strtoupper(substr($tenant_name ?? '', 0, 1)); ?></div>
             </div>
         </div>
         
