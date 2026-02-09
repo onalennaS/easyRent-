@@ -62,28 +62,7 @@ $check_inquiries_table = "SHOW TABLES LIKE 'inquiries'";
 $inquiries_table_result = mysqli_query($conn, $check_inquiries_table);
 $has_inquiries_table = mysqli_num_rows($inquiries_table_result) > 0;
 
-// Get landlord statistics
-$stats_query = "
-    SELECT 
-        (SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id) as total_properties,
-        " . ($has_status ? "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id AND status = 'approved')" : "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id)") . " as active_properties,
-        " . ($has_status ? "(SELECT COUNT(*) FROM properties WHERE landlord_id = $landlord_id AND status = 'pending')" : "0") . " as pending_properties,
-        " . ($has_rent_amount ? "(SELECT COALESCE(SUM(rent_amount), 0) FROM properties WHERE landlord_id = $landlord_id" . ($has_status ? " AND status = 'approved'" : "") . ")" : "0") . " as monthly_income,
-        " . ($has_maintenance_table ? "(SELECT COUNT(*) FROM maintenance_requests mr JOIN properties p ON mr.property_id = p.id WHERE p.landlord_id = $landlord_id AND mr.status = 'open')" : "0") . " as open_maintenance
-";
 
-$stats_result = mysqli_query($conn, $stats_query);
-if ($stats_result) {
-    $stats = mysqli_fetch_assoc($stats_result);
-} else {
-    $stats = [
-        'total_properties' => 0,
-        'active_properties' => 0,
-        'pending_properties' => 0,
-        'monthly_income' => 0,
-        'open_maintenance' => 0
-    ];
-}
 
 // Get recent properties
 $properties_query = "
@@ -270,148 +249,6 @@ if ($pending_applications_result) {
             font-size: 1.5rem;
             color: #64748b;
             cursor: pointer;
-        }
-
-        /* Hero Section */
-        .hero-section {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
-            border-radius: 20px;
-            padding: 3rem 2rem;
-            color: white;
-            margin-bottom: 2rem;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="70" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-        }
-
-        .hero-title {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .hero-subtitle {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            margin-bottom: 2rem;
-        }
-
-        .quick-actions {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .quick-action-btn {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 0.875rem 1.75rem;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.95rem;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.625rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .quick-action-btn:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-            border-color: rgba(255,255,255,0.5);
-        }
-
-        .quick-action-btn i {
-            font-size: 1rem;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 16px;
-            padding: 2rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--accent-color);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .stat-card.properties { --accent-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
-        .stat-card.income { --accent-color: linear-gradient(135deg, #10b981 0%, #047857 100%); }
-        .stat-card.maintenance { --accent-color: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .stat-card.pending { --accent-color: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-
-        .stat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 1rem;
-        }
-
-        .stat-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-            background: var(--accent-color);
-        }
-
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #1e293b;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-label {
-            color: #64748b;
-            font-weight: 500;
         }
 
         /* Content Grid */
@@ -794,21 +631,19 @@ if ($pending_applications_result) {
             }
         }
 
+        @media (max-width: 1024px) {
+            .main-content {
+                padding: 1.5rem;
+            }
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 padding: 1rem;
             }
 
-            .hero-title {
-                font-size: 2rem;
-            }
-
-            .hero-subtitle {
-                font-size: 1rem;
-            }
-
             .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                grid-template-columns: repeat(1, minmax(0, 1fr));
             }
 
             .property-grid {
@@ -816,23 +651,7 @@ if ($pending_applications_result) {
             }
         }
 
-        @media (max-width: 640px) {
-            .hero-section {
-                padding: 2rem 1.5rem;
-            }
 
-            .quick-actions {
-                justify-content: center;
-            }
-
-            .stat-card {
-                padding: 1.5rem;
-            }
-
-            .content-card {
-                padding: 1.5rem;
-            }
-        }
     </style>
 </head>
 <body>
@@ -870,30 +689,8 @@ if ($pending_applications_result) {
             </div>
         </div>
 
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <div class="hero-content">
-                <h1 class="hero-title">Good <?php echo date('H') < 12 ? 'Morning' : (date('H') < 18 ? 'Afternoon' : 'Evening'); ?>!</h1>
-                <p class="hero-subtitle">Manage your properties efficiently and grow your rental business</p>
-                
-                <div class="quick-actions">
-                    <a href="add_property.php" class="quick-action-btn">
-                        <i class="fas fa-plus"></i>
-                        Add New Property
-                    </a>
-                    <a href="maintenance.php" class="quick-action-btn">
-                        <i class="fas fa-tools"></i>
-                        Maintenance Requests
-                    </a>
-                    <a href="reports.php" class="quick-action-btn">
-                        <i class="fas fa-chart-line"></i>
-                        View Reports
-                    </a>
-                </div>
-            </div>
-        </div>
 
-      
+
         <!-- Content Grid -->
         <div class="content-grid">
             <!-- Recent Properties -->
