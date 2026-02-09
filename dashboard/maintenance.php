@@ -285,7 +285,7 @@ function formatCurrency($amount) {
             align-items: center;
             margin-bottom: 2rem;
             padding-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid #e5e7eb;
         }
 
         .landlord-info {
@@ -323,73 +323,6 @@ function formatCurrency($amount) {
             cursor: pointer;
         }
 
-        /* Hero Section */
-        .hero-section {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
-            border-radius: 20px;
-            padding: 2rem;
-            color: white;
-            margin-bottom: 2rem;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="70" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .hero-title {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .hero-subtitle {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        .quick-actions {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .quick-action-btn {
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .quick-action-btn:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
-        }
-
         /* Alerts */
         .alert {
             padding: 1rem 1.5rem;
@@ -413,56 +346,136 @@ function formatCurrency($amount) {
             border: 1px solid #fecaca;
         }
 
-        /* Stats */
+        /* Stats Grid – Colorful & Unique Style */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.5rem;
+            gap: 1.25rem;
             margin-bottom: 2rem;
         }
 
         .stat-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
-            transition: all 0.3s ease;
+            background: var(--accent-gradient);
+            border-radius: 20px;
+            padding: 1.75rem;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            border: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
             overflow: hidden;
-            text-align: center;
+            cursor: pointer;
         }
 
         .stat-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--accent-color);
+            top: -50%;
+            right: -20%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            transition: all 0.6s ease;
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            transition: all 0.6s ease;
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            transform: translateY(-10px) scale(1.03);
+            box-shadow: 0 20px 40px var(--shadow-color);
         }
 
-        .stat-card.open { --accent-color: #3b82f6; }
-        .stat-card.assigned { --accent-color: #f59e0b; }
-        .stat-card.progress { --accent-color: #8b5cf6; }
-        .stat-card.completed { --accent-color: #10b981; }
+        .stat-card:hover::before {
+            transform: scale(1.3) rotate(45deg);
+            top: -60%;
+            right: -30%;
+        }
+
+        .stat-card:hover::after {
+            transform: scale(1.4) rotate(-45deg);
+        }
+
+        .stat-card.open { 
+            --accent-gradient: linear-gradient(135deg, #8b7bce 0%, #6b5bb0 100%);
+            --shadow-color: rgba(139, 123, 206, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.assigned { 
+            --accent-gradient: linear-gradient(135deg, #7ec8c3 0%, #5fb3ad 100%);
+            --shadow-color: rgba(126, 200, 195, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.progress { 
+            --accent-gradient: linear-gradient(135deg, #f4a79d 0%, #e8907f 100%);
+            --shadow-color: rgba(244, 167, 157, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.completed { 
+            --accent-gradient: linear-gradient(135deg, #6bcf9d 0%, #4fb883 100%);
+            --shadow-color: rgba(107, 207, 157, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            min-width: 50px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: white;
+            background: var(--icon-bg);
+            backdrop-filter: blur(10px);
+            flex-shrink: 0;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover .stat-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
 
         .stat-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #1e293b;
-            margin-bottom: 0.5rem;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 0.3rem;
+            line-height: 1.2;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
         }
 
         .stat-label {
-            color: #64748b;
-            font-weight: 500;
+            color: rgba(255, 255, 255, 0.95);
+            font-weight: 600;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         /* Filters */
@@ -603,10 +616,10 @@ function formatCurrency($amount) {
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
-        .request-item.open { border-left-color: #3b82f6; }
-        .request-item.assigned { border-left-color: #f59e0b; }
-        .request-item.in_progress { border-left-color: #8b5cf6; }
-        .request-item.completed { border-left-color: #10b981; }
+        .request-item.open { border-left-color: #8b7bce; }
+        .request-item.assigned { border-left-color: #7ec8c3; }
+        .request-item.in_progress { border-left-color: #f4a79d; }
+        .request-item.completed { border-left-color: #6bcf9d; }
 
         .request-header {
             display: flex;
@@ -629,10 +642,10 @@ function formatCurrency($amount) {
             text-transform: capitalize;
         }
 
-        .status-open { background: #dbeafe; color: #1d4ed8; }
-        .status-assigned { background: #fef3c7; color: #92400e; }
-        .status-in_progress { background: #ede9fe; color: #5b21b6; }
-        .status-completed { background: #dcfce7; color: #166534; }
+        .status-open { background: #ede9fe; color: #6b5bb0; }
+        .status-assigned { background: #ccf5f2; color: #5fb3ad; }
+        .status-in_progress { background: #ffe8e0; color: #e8907f; }
+        .status-completed { background: #d1f4e0; color: #4fb883; }
 
         .request-meta {
             display: grid;
@@ -933,14 +946,6 @@ function formatCurrency($amount) {
                 padding: 1rem;
             }
 
-            .hero-title {
-                font-size: 1.75rem;
-            }
-
-            .hero-subtitle {
-                font-size: 1rem;
-            }
-
             .card-title {
                 font-size: 1.25rem;
             }
@@ -972,10 +977,6 @@ function formatCurrency($amount) {
         }
 
         @media (max-width: 640px) {
-            .hero-section {
-                padding: 1.5rem 1rem;
-            }
-
             .request-header {
                 flex-direction: column;
                 align-items: flex-start;
@@ -1008,6 +1009,24 @@ function formatCurrency($amount) {
 
             .request-image img {
                 height: 80px;
+            }
+
+            .stat-card {
+                padding: 1.25rem;
+            }
+            
+            .stat-value {
+                font-size: 1.5rem;
+            }
+            
+            .stat-label {
+                font-size: 0.75rem;
+            }
+            
+            .stat-icon {
+                width: 42px;
+                height: 42px;
+                font-size: 1.1rem;
             }
         }
     </style>
@@ -1047,22 +1066,6 @@ function formatCurrency($amount) {
             </div>
         </div>
 
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <div class="hero-content">
-                <div>
-                    <h1 class="hero-title">Maintenance Requests</h1>
-                    <p class="hero-subtitle">Manage maintenance requests for your properties</p>
-                </div>
-                <div class="quick-actions">
-                    <a href="#" class="quick-action-btn">
-                        <i class="fas fa-file-export"></i>
-                        Export Reports
-                    </a>
-                </div>
-            </div>
-        </div>
-
         <?php if (isset($_SESSION['success_message'])): ?>
             <div class="alert alert-success">
                 <i class="fas fa-check-circle"></i>
@@ -1080,20 +1083,48 @@ function formatCurrency($amount) {
         <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card open">
-                <div class="stat-value"><?php echo $stats['open_count'] ?? 0; ?></div>
-                <div class="stat-label">Open Requests</div>
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['open_count'] ?? 0; ?></div>
+                        <div class="stat-label">Open Requests</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                </div>
             </div>
             <div class="stat-card assigned">
-                <div class="stat-value"><?php echo $stats['assigned_count'] ?? 0; ?></div>
-                <div class="stat-label">Assigned to Contractors</div>
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['assigned_count'] ?? 0; ?></div>
+                        <div class="stat-label">Assigned</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                </div>
             </div>
             <div class="stat-card progress">
-                <div class="stat-value"><?php echo $stats['in_progress_count'] ?? 0; ?></div>
-                <div class="stat-label">In Progress</div>
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['in_progress_count'] ?? 0; ?></div>
+                        <div class="stat-label">In Progress</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                </div>
             </div>
             <div class="stat-card completed">
-                <div class="stat-value"><?php echo $stats['completed_count'] ?? 0; ?></div>
-                <div class="stat-label">Completed</div>
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['completed_count'] ?? 0; ?></div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1272,7 +1303,6 @@ function formatCurrency($amount) {
                 sidebar.classList.toggle('active');
             });
 
-            // Close sidebar when clicking outside on mobile
             document.addEventListener('click', (e) => {
                 if (window.innerWidth < 900 && 
                     sidebar.classList.contains('active') && 
@@ -1283,8 +1313,6 @@ function formatCurrency($amount) {
             });
         }
 
-        // Logout confirmation
-        // Logout confirmation function
         function confirmLogout(event) {
             event.preventDefault();
             
@@ -1303,29 +1331,7 @@ function formatCurrency($amount) {
                 }
             });
         }
-        
-        const logoutLink = document.getElementById('logoutLink');
-        if (logoutLink) {
-            logoutLink.addEventListener('click', function(e) {
-            e.preventDefault(); // prevent default link behavior
 
-            Swal.fire({
-                title: 'Are you sure?',
-                text: 'You will be logged out from your account.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6', // blue
-                cancelButtonColor: '#d33',     // red
-                confirmButtonText: 'Yes, log out',
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = '../auth/logout.php';
-                }
-            });
-        });
-
-        // Maintenance requests data
         const maintenanceRequests = <?php 
             $requests = [];
             if ($maintenance_result && mysqli_num_rows($maintenance_result) > 0) {
@@ -1370,7 +1376,6 @@ function formatCurrency($amount) {
             echo json_encode($requests);
         ?>;
 
-        // Modal functions
         function openDetailsModal(requestId) {
             const request = maintenanceRequests[requestId];
             if (!request) return;
@@ -1615,7 +1620,6 @@ function formatCurrency($amount) {
             document.querySelector('.filters').submit();
         }
 
-        // Close modals when clicking outside
         window.onclick = function(event) {
             const modals = ['detailsModal', 'manageModal', 'imageModal'];
             modals.forEach(modalId => {
@@ -1626,7 +1630,6 @@ function formatCurrency($amount) {
             });
         };
 
-        // Escape key to close modals
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeDetailsModal();

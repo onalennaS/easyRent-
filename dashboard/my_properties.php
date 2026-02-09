@@ -27,8 +27,17 @@ try {
     
     // Fetch properties based on user role
     if ($userRole === 'landlord') {
-        // Updated query to include admin approval status
-        $sql = "SELECT p.*, 
+        // Filter parameters
+        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
+        $approval_filter = $_GET['approval'] ?? 'all';
+        $availability_filter = $_GET['availability'] ?? 'all';
+        $property_type_filter = $_GET['type'] ?? 'all';
+        $bedrooms_filter = isset($_GET['bedrooms']) && $_GET['bedrooms'] !== '' ? (int)$_GET['bedrooms'] : 0;
+        $min_rent = isset($_GET['min_rent']) && $_GET['min_rent'] !== '' ? (float)$_GET['min_rent'] : 0;
+        $max_rent = isset($_GET['max_rent']) && $_GET['max_rent'] !== '' ? (float)$_GET['max_rent'] : 0;
+
+        // Build base query with subqueries
+        $baseSql = "SELECT p.*, 
                 (SELECT COUNT(*) FROM rental_applications ra WHERE ra.property_id = p.id) as application_count,
                 (SELECT COUNT(*) FROM leases l WHERE l.property_id = p.id AND l.status = 'active') as active_lease,
                 (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.id LIMIT 1) as primary_image,
@@ -38,11 +47,71 @@ try {
                 END as approval_status
                 FROM properties p 
                 WHERE p.landlord_id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $userId);
+        
+        $params = [$userId];
+        $types = 'i';
+        
+        // Add filter conditions
+        if (!empty($search)) {
+            $baseSql .= " AND (p.title LIKE ? OR p.address LIKE ? OR p.description LIKE ?)";
+            $searchParam = '%' . $search . '%';
+            $params = array_merge($params, [$searchParam, $searchParam, $searchParam]);
+            $types .= 'sss';
+        }
+        if ($approval_filter === 'approved') {
+            $baseSql .= " AND p.admin_approved = 1";
+        } elseif ($approval_filter === 'pending') {
+            $baseSql .= " AND (p.admin_approved = 0 OR p.admin_approved IS NULL)";
+        }
+        if ($property_type_filter !== 'all' && !empty($property_type_filter)) {
+            $baseSql .= " AND p.property_type = ?";
+            $params[] = $property_type_filter;
+            $types .= 's';
+        }
+        if ($bedrooms_filter > 0) {
+            $baseSql .= " AND p.bedrooms >= ?";
+            $params[] = $bedrooms_filter;
+            $types .= 'i';
+        }
+        if ($min_rent > 0) {
+            $baseSql .= " AND p.rent_amount >= ?";
+            $params[] = $min_rent;
+            $types .= 'd';
+        }
+        if ($max_rent > 0) {
+            $baseSql .= " AND p.rent_amount <= ?";
+            $params[] = $max_rent;
+            $types .= 'd';
+        }
+        
+        // Availability filter requires subquery - wrap in derived table
+        if ($availability_filter === 'available') {
+            $baseSql .= " AND (SELECT COUNT(*) FROM leases l WHERE l.property_id = p.id AND l.status = 'active') = 0";
+        } elseif ($availability_filter === 'occupied') {
+            $baseSql .= " AND (SELECT COUNT(*) FROM leases l WHERE l.property_id = p.id AND l.status = 'active') > 0";
+        }
+        
+        $stmt = $conn->prepare($baseSql);
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
         $stmt->execute();
         $result = $stmt->get_result();
         $properties = $result->fetch_all(MYSQLI_ASSOC);
+        
+        // Get property types for filter dropdown (landlord's properties only)
+        $typesSql = "SELECT DISTINCT property_type FROM properties WHERE landlord_id = ? AND property_type != '' AND property_type IS NOT NULL ORDER BY property_type";
+        $typesStmt = $conn->prepare($typesSql);
+        $typesStmt->bind_param("i", $userId);
+        $typesStmt->execute();
+        $typesResult = $typesStmt->get_result();
+        $property_types = [];
+        while ($row = $typesResult->fetch_assoc()) {
+            $property_types[] = $row['property_type'];
+        }
+        if (empty($property_types)) {
+            $property_types = ['apartment', 'house', 'condo', 'townhouse', 'studio', 'duplex', 'villa', 'other'];
+        }
             
         // Calculate stats
         $totalProperties = count($properties);
@@ -221,140 +290,199 @@ body {
     cursor: pointer;
 }
 
-/* Hero Section */
-.hero-section {
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
-    border-radius: 20px;
-    padding: 3rem 2rem;
-    color: white;
-    margin-bottom: 2rem;
-    position: relative;
-    overflow: hidden;
-}
-
-.hero-section::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="70" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-}
-
-.hero-content {
-    position: relative;
-    z-index: 2;
-}
-
-.hero-title {
-    font-size: 2.5rem;
-    font-weight: bold;
-    margin-bottom: 0.5rem;
-}
-
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    margin-bottom: 2rem;
-}
-
-.quick-actions {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.quick-action-btn {
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 12px;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.quick-action-btn:hover {
-    background: rgba(255,255,255,0.3);
-    transform: translateY(-2px);
-}
-
-/* Stats Grid */
+/* Stats Grid – Colorful & Unique Style */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
     margin-bottom: 2rem;
 }
 
 .stat-card {
-    background: white;
-    border-radius: 16px;
-    padding: 2rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid #e5e7eb;
-    transition: all 0.3s ease;
+    background: var(--accent-gradient);
+    border-radius: 20px;
+    padding: 1.75rem;
+    box-shadow: 0 10px 30px var(--shadow-color);
+    border: none;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
     overflow: hidden;
+    cursor: pointer;
 }
 
 .stat-card::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: var(--accent-color);
+    top: -50%;
+    right: -20%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    transition: all 0.6s ease;
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    transition: all 0.6s ease;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    transform: translateY(-10px) scale(1.03);
+    box-shadow: 0 20px 40px var(--shadow-color);
 }
 
-.stat-card.properties { --accent-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
-.stat-card.income { --accent-color: linear-gradient(135deg, #10b981 0%, #047857 100%); }
-.stat-card.applications { --accent-color: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-.stat-card.occupied { --accent-color: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-.stat-card.approved { --accent-color: linear-gradient(135deg, #10b981 0%, #047857 100%); }
-.stat-card.pending { --accent-color: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.stat-card:hover::before {
+    transform: scale(1.3) rotate(45deg);
+    top: -60%;
+    right: -30%;
+}
+
+.stat-card:hover::after {
+    transform: scale(1.4) rotate(-45deg);
+}
+
+.stat-card.properties { 
+    --accent-gradient: linear-gradient(135deg, #8b7bce 0%, #6b5bb0 100%);
+    --shadow-color: rgba(139, 123, 206, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card.income { 
+    --accent-gradient: linear-gradient(135deg, #f4a79d 0%, #e8907f 100%);
+    --shadow-color: rgba(244, 167, 157, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card.applications { 
+    --accent-gradient: linear-gradient(135deg, #7ec8c3 0%, #5fb3ad 100%);
+    --shadow-color: rgba(126, 200, 195, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card.occupied { 
+    --accent-gradient: linear-gradient(135deg, #6bcf9d 0%, #4fb883 100%);
+    --shadow-color: rgba(107, 207, 157, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card.approved { 
+    --accent-gradient: linear-gradient(135deg, #b69ce8 0%, #9d7fd6 100%);
+    --shadow-color: rgba(182, 156, 232, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card.pending { 
+    --accent-gradient: linear-gradient(135deg, #f5b5a8 0%, #e89b8a 100%);
+    --shadow-color: rgba(245, 181, 168, 0.4);
+    --icon-bg: rgba(255, 255, 255, 0.2);
+}
+
+/* Filters */
+.filters-container {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+    margin-bottom: 2rem;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.filter-label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.filter-select,
+.filter-input {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: white;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
 
 .stat-header {
     display: flex;
     justify-content: space-between;
-    align-items: start;
-    margin-bottom: 1rem;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0;
+    position: relative;
+    z-index: 1;
 }
 
 .stat-icon {
     width: 50px;
     height: 50px;
-    border-radius: 12px;
+    min-width: 50px;
+    border-radius: 15px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     color: white;
-    background: var(--accent-color);
+    background: var(--icon-bg);
+    backdrop-filter: blur(10px);
+    flex-shrink: 0;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+    transform: scale(1.1) rotate(5deg);
 }
 
 .stat-value {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #1e293b;
-    margin-bottom: 0.5rem;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 0.3rem;
+    line-height: 1.2;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .stat-label {
-    color: #64748b;
-    font-weight: 500;
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Card Title */
@@ -382,6 +510,8 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .table-title {
@@ -551,7 +681,7 @@ body {
     }
     
     .stats-grid {
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -580,16 +710,8 @@ body {
         padding: 1rem;
     }
 
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .hero-subtitle {
-        font-size: 1rem;
-    }
-
     .stats-grid {
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(1, minmax(0, 1fr));
     }
     
     .properties-table {
@@ -603,16 +725,35 @@ body {
 }
 
 @media (max-width: 640px) {
-    .hero-section {
-        padding: 2rem 1.5rem;
-    }
-
-    .quick-actions {
-        justify-content: center;
-    }
-
     .stat-card {
-        padding: 1.5rem;
+        padding: 1.25rem;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+    }
+    
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+    }
+    
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-actions {
+        flex-direction: column;
+    }
+    
+    .filter-actions .btn {
+        width: 100%;
+        justify-content: center;
     }
 }
     </style>
@@ -649,29 +790,6 @@ body {
             <div class="landlord-info">
                 <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></span>
                 <div class="avatar"><?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?></div>
-            </div>
-        </div>
-        
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <div class="hero-content">
-                <h1 class="hero-title">My Properties</h1>
-                <p class="hero-subtitle">Manage your rental properties and track applications</p>
-                
-                <div class="quick-actions">
-                    <a href="add_property.php" class="quick-action-btn">
-                        <i class="fas fa-plus"></i>
-                        Add New Property
-                    </a>
-                    <a href="search.php" class="quick-action-btn">
-                        <i class="fas fa-search"></i>
-                        Find Properties
-                    </a>
-                    <a href="settings.php" class="quick-action-btn">
-                        <i class="fas fa-cog"></i>
-                        Account Settings
-                    </a>
-                </div>
             </div>
         </div>
 
@@ -751,9 +869,83 @@ body {
         </div>
 
         <!-- Property Listings -->
+        <?php if ($userRole === 'landlord'): ?>
+        <!-- Filters -->
+        <div class="filters-container">
+            <form method="GET" action="my_properties.php" id="filter-form">
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label class="filter-label"><i class="fas fa-search"></i> Search</label>
+                        <input type="text" name="search" class="filter-input" placeholder="Title, address..." 
+                               value="<?php echo htmlspecialchars($search ?? ''); ?>">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Admin Status</label>
+                        <select name="approval" class="filter-select">
+                            <option value="all" <?php echo ($approval_filter ?? 'all') === 'all' ? 'selected' : ''; ?>>All</option>
+                            <option value="approved" <?php echo ($approval_filter ?? '') === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                            <option value="pending" <?php echo ($approval_filter ?? '') === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Availability</label>
+                        <select name="availability" class="filter-select">
+                            <option value="all" <?php echo ($availability_filter ?? 'all') === 'all' ? 'selected' : ''; ?>>All</option>
+                            <option value="available" <?php echo ($availability_filter ?? '') === 'available' ? 'selected' : ''; ?>>Available</option>
+                            <option value="occupied" <?php echo ($availability_filter ?? '') === 'occupied' ? 'selected' : ''; ?>>Occupied</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Property Type</label>
+                        <select name="type" class="filter-select">
+                            <option value="all" <?php echo ($property_type_filter ?? 'all') === 'all' ? 'selected' : ''; ?>>All Types</option>
+                            <?php foreach (($property_types ?? []) as $type): ?>
+                                <option value="<?php echo htmlspecialchars($type); ?>" 
+                                    <?php echo ($property_type_filter ?? '') === $type ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars(ucfirst($type)); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label"><i class="fas fa-bed"></i> Min Bedrooms</label>
+                        <select name="bedrooms" class="filter-select">
+                            <option value="">Any</option>
+                            <option value="1" <?php echo ($bedrooms_filter ?? 0) == 1 ? 'selected' : ''; ?>>1+</option>
+                            <option value="2" <?php echo ($bedrooms_filter ?? 0) == 2 ? 'selected' : ''; ?>>2+</option>
+                            <option value="3" <?php echo ($bedrooms_filter ?? 0) == 3 ? 'selected' : ''; ?>>3+</option>
+                            <option value="4" <?php echo ($bedrooms_filter ?? 0) == 4 ? 'selected' : ''; ?>>4+</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Min Rent (R)</label>
+                        <input type="number" name="min_rent" class="filter-input" placeholder="Min" 
+                               value="<?php echo ($min_rent ?? 0) > 0 ? (int)$min_rent : ''; ?>" min="0" step="100">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Max Rent (R)</label>
+                        <input type="number" name="max_rent" class="filter-input" placeholder="Max" 
+                               value="<?php echo ($max_rent ?? 0) > 0 ? (int)$max_rent : ''; ?>" min="0" step="100">
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter"></i> Apply Filters
+                    </button>
+                    <a href="my_properties.php" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear Filters
+                    </a>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+        
         <div class="properties-table-container">
             <div class="table-header">
                 <h2 class="table-title">Your Property Listings</h2>
+                <?php if ($userRole === 'landlord' && isset($properties)): ?>
+                <span style="color: #64748b; font-size: 0.9rem;"><?php echo count($properties); ?> properties</span>
+                <?php endif; ?>
             </div>
             
             <?php if(!empty($properties)): ?>
