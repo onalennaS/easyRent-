@@ -14,6 +14,34 @@ if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
+// Create landlord_documents table if it doesn't exist
+$check_table = "SHOW TABLES LIKE 'landlord_documents'";
+$table_result = mysqli_query($conn, $check_table);
+if (!$table_result || mysqli_num_rows($table_result) == 0) {
+    $create_documents_table = "
+        CREATE TABLE IF NOT EXISTS landlord_documents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            landlord_id INT NOT NULL,
+            document_type VARCHAR(100) NOT NULL,
+            document_name VARCHAR(255) NOT NULL,
+            file_path VARCHAR(500) NOT NULL,
+            status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_doc (landlord_id, document_type),
+            INDEX idx_landlord_id (landlord_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+    mysqli_query($conn, $create_documents_table);
+    
+    // Add rejection_reason column if it doesn't exist
+    $check_column = "SHOW COLUMNS FROM landlord_documents LIKE 'rejection_reason'";
+    $col_result = mysqli_query($conn, $check_column);
+    if (!$col_result || mysqli_num_rows($col_result) == 0) {
+        $alter_table = "ALTER TABLE landlord_documents ADD COLUMN rejection_reason TEXT NULL AFTER status";
+        mysqli_query($conn, $alter_table);
+    }
+}
+
 // First, let's check what columns exist in the properties table
 $check_properties_query = "SHOW COLUMNS FROM properties";
 $properties_columns_result = mysqli_query($conn, $check_properties_query);

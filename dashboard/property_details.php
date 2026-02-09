@@ -1,16 +1,11 @@
 <?php
 session_start();
 
-// Check if user is logged in
+// Check if user is logged in (optional - allow unregistered users to view)
 $isLoggedIn = isset($_SESSION['user_id']);
-if (!$isLoggedIn) {
-    header("Location: auth/login.php");
-    exit();
-}
-
-$username = $_SESSION['username'];
-$userRole = $_SESSION['user_type'];
-$userId = $_SESSION['user_id'];
+$username = $isLoggedIn ? ($_SESSION['username'] ?? '') : '';
+$userRole = $isLoggedIn ? ($_SESSION['user_type'] ?? '') : '';
+$userId = $isLoggedIn ? ($_SESSION['user_id'] ?? '') : '';
 
 // Get property ID from URL
 $propertyId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -92,9 +87,9 @@ try {
         }
     }
     
-    // Check if user has already applied for this property
+    // Check if user has already applied for this property (only if logged in as tenant)
     $hasApplied = false;
-    if ($userRole === 'tenant') {
+    if ($isLoggedIn && $userRole === 'tenant') {
         $applicationSql = "SELECT id FROM rental_applications WHERE property_id = ? AND tenant_id = ?";
         $applicationStmt = $conn->prepare($applicationSql);
         $applicationStmt->bind_param("ii", $propertyId, $userId);
@@ -1219,6 +1214,7 @@ function fileExists($path) {
           <div>
             <div class="bg-white shadow rounded-2xl p-6 mb-6">
               <h3 class="text-xl font-bold mb-4">Contact Landlord</h3>
+              <?php if ($isLoggedIn && $userRole === 'tenant'): ?>
               <div class="space-y-3 mb-6">
                 <div class="flex items-center">
                   <i class="fas fa-user mr-3 text-blue-500"></i>
@@ -1235,15 +1231,31 @@ function fileExists($path) {
                   </div>
                 <?php endif; ?>
               </div>
-              <?php if ($userRole === 'tenant'): ?>
+              <?php else: ?>
+              <div class="bg-gray-100 border border-gray-300 text-gray-700 px-4 py-3 rounded mb-6">
+                <i class="fas fa-lock mr-2"></i> Contact information is available to registered tenants only. <a href="../auth/login.php" class="text-blue-600 hover:underline">Sign in</a> or <a href="../auth/register.php" class="text-blue-600 hover:underline">register</a> to view contact details.
+              </div>
+              <?php endif; ?>
+              <?php if ($isLoggedIn && $userRole === 'tenant'): ?>
                 <?php if ($hasApplied): ?>
                   <div class="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded mb-3">
                     <i class="fas fa-check-circle mr-2"></i> You have already applied for this property
                   </div>
                 <?php else: ?>
-                 
+                  <button onclick="applyForProperty()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors mb-3">
+                    <i class="fas fa-paper-plane mr-2"></i>Apply for Property
+                  </button>
                 <?php endif; ?>
-                
+              <?php elseif (!$isLoggedIn): ?>
+                <div class="bg-blue-100 border border-blue-300 text-blue-700 px-4 py-3 rounded mb-3">
+                  <i class="fas fa-info-circle mr-2"></i> Sign in to apply for this property
+                </div>
+                <a href="../auth/login.php" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors mb-3">
+                  <i class="fas fa-sign-in-alt mr-2"></i>Login to Apply
+                </a>
+                <a href="../auth/register.php" class="block w-full text-center border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3 px-4 rounded-lg transition-colors">
+                  <i class="fas fa-user-plus mr-2"></i>Register
+                </a>
               <?php else: ?>
                 <div class="bg-blue-100 border border-blue-300 text-blue-700 px-4 py-3 rounded">
                   <i class="fas fa-info-circle mr-2"></i> Contact information is available to tenants only

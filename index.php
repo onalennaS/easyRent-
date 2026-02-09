@@ -594,13 +594,43 @@ if ($isLoggedIn) {
     border-bottom: 1px solid #f3f4f6;
 }
 
-/* User section at bottom */
-.mobile-nav-user-section {
-    padding: 1rem;
-    background: #f9fafb;
-    margin-top: auto;
-    border-top: 1px solid #e5e7eb;
-}
+        /* User section at bottom */
+        .mobile-nav-user-section {
+            padding: 1rem;
+            background: #f9fafb;
+            margin-top: auto;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        /* Pagination styling */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .pagination-btn {
+            min-width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        @media (max-width: 640px) {
+            .pagination-container {
+                gap: 0.25rem;
+            }
+            
+            .pagination-btn {
+                min-width: 36px;
+                height: 36px;
+                font-size: 0.875rem;
+                padding: 0.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -822,17 +852,45 @@ if ($isLoggedIn) {
 
                 $whereClause = implode(" AND ", $whereConditions);
                 
+                // Helper function to build pagination URL
+                function buildPaginationUrl($page) {
+                    $params = $_GET;
+                    $params['page'] = $page;
+                    return $_SERVER['PHP_SELF'] . '?' . http_build_query($params);
+                }
+                
+                // Pagination setup
+                $itemsPerPage = 12;
+                $currentPage = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+                $offset = ($currentPage - 1) * $itemsPerPage;
+                
+                // Get total count for pagination
+                $countSql = "SELECT COUNT(*) as total FROM properties p WHERE $whereClause";
+                $countStmt = $conn->prepare($countSql);
+                if (!empty($params)) {
+                    $countStmt->bind_param($types, ...$params);
+                }
+                $countStmt->execute();
+                $countResult = $countStmt->get_result();
+                $totalProperties = $countResult->fetch_assoc()['total'];
+                $totalPages = ceil($totalProperties / $itemsPerPage);
+                $countStmt->close();
+                
+                // Fetch properties with pagination
                 $sql = "SELECT p.*, 
                         (SELECT image_url FROM property_images 
                          WHERE property_id = p.id AND is_primary = 1 LIMIT 1) AS main_image
                         FROM properties p
                         WHERE $whereClause 
                         ORDER BY p.created_at DESC 
-                        LIMIT 12";
+                        LIMIT ? OFFSET ?";
 
                 $stmt = $conn->prepare($sql);
                 if (!empty($params)) {
-                    $stmt->bind_param($types, ...$params);
+                    $types .= "ii";
+                    $stmt->bind_param($types, ...array_merge($params, [$itemsPerPage, $offset]));
+                } else {
+                    $stmt->bind_param("ii", $itemsPerPage, $offset);
                 }
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -871,8 +929,8 @@ if ($isLoggedIn) {
 
                         echo '<div class="mt-4 flex items-center justify-between">';
                         echo '<span class="text-blue-600 font-bold text-lg">R' . $rent_amount . '</span>';
-                        echo '<a href="' . ($isLoggedIn ? 'dashboard/property_details.php?id=' . $property['id'] : 'auth/register.php') . '" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">';
-                        echo '<i class="fas ' . ($isLoggedIn ? 'fa-eye' : 'fa-user-plus') . ' mr-2"></i>' . ($isLoggedIn ? 'View' : 'Sign Up to View') . '</a>';
+                        echo '<a href="dashboard/property_details.php?id=' . $property['id'] . '" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">';
+                        echo '<i class="fas fa-eye mr-2"></i>View Details</a>';
                         echo '</div>';
 
                         echo '</div>';
@@ -880,6 +938,81 @@ if ($isLoggedIn) {
                     }
 
                     echo '</div>';
+                    
+                    // Pagination controls
+                    if ($totalPages > 1) {
+                        echo '<div class="mt-12 pagination-container">';
+                        
+                        // Previous button
+                        if ($currentPage > 1) {
+                            $prevPage = $currentPage - 1;
+                            $prevUrl = buildPaginationUrl($prevPage);
+                            echo '<a href="' . htmlspecialchars($prevUrl) . '" class="pagination-btn px-3 sm:px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">';
+                            echo '<i class="fas fa-chevron-left mr-1 sm:mr-2"></i><span class="hidden sm:inline">Previous</span>';
+                            echo '</a>';
+                        } else {
+                            echo '<span class="pagination-btn px-3 sm:px-4 py-2 bg-gray-100 text-gray-400 rounded-lg border border-gray-200 cursor-not-allowed">';
+                            echo '<i class="fas fa-chevron-left mr-1 sm:mr-2"></i><span class="hidden sm:inline">Previous</span>';
+                            echo '</span>';
+                        }
+                        
+                        // Page numbers
+                        echo '<div class="flex space-x-1">';
+                        $startPage = max(1, $currentPage - 2);
+                        $endPage = min($totalPages, $currentPage + 2);
+                        
+                        // First page
+                        if ($startPage > 1) {
+                            $firstUrl = buildPaginationUrl(1);
+                            echo '<a href="' . htmlspecialchars($firstUrl) . '" class="pagination-btn px-2 sm:px-3 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">1</a>';
+                            if ($startPage > 2) {
+                                echo '<span class="px-1 sm:px-2 py-2 text-gray-500">...</span>';
+                            }
+                        }
+                        
+                        // Page range
+                        for ($i = $startPage; $i <= $endPage; $i++) {
+                            if ($i == $currentPage) {
+                                echo '<span class="pagination-btn px-2 sm:px-3 py-2 bg-blue-600 text-white rounded-lg font-semibold">' . $i . '</span>';
+                            } else {
+                                $pageUrl = buildPaginationUrl($i);
+                                echo '<a href="' . htmlspecialchars($pageUrl) . '" class="pagination-btn px-2 sm:px-3 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">' . $i . '</a>';
+                            }
+                        }
+                        
+                        // Last page
+                        if ($endPage < $totalPages) {
+                            if ($endPage < $totalPages - 1) {
+                                echo '<span class="px-1 sm:px-2 py-2 text-gray-500">...</span>';
+                            }
+                            $lastUrl = buildPaginationUrl($totalPages);
+                            echo '<a href="' . htmlspecialchars($lastUrl) . '" class="pagination-btn px-2 sm:px-3 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">' . $totalPages . '</a>';
+                        }
+                        
+                        echo '</div>';
+                        
+                        // Next button
+                        if ($currentPage < $totalPages) {
+                            $nextPage = $currentPage + 1;
+                            $nextUrl = buildPaginationUrl($nextPage);
+                            echo '<a href="' . htmlspecialchars($nextUrl) . '" class="pagination-btn px-3 sm:px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">';
+                            echo '<span class="hidden sm:inline">Next</span><i class="fas fa-chevron-right ml-1 sm:ml-2"></i>';
+                            echo '</a>';
+                        } else {
+                            echo '<span class="pagination-btn px-3 sm:px-4 py-2 bg-gray-100 text-gray-400 rounded-lg border border-gray-200 cursor-not-allowed">';
+                            echo '<span class="hidden sm:inline">Next</span><i class="fas fa-chevron-right ml-1 sm:ml-2"></i>';
+                            echo '</span>';
+                        }
+                        
+                        echo '</div>';
+                        
+                        // Results info
+                        $startItem = ($currentPage - 1) * $itemsPerPage + 1;
+                        $endItem = min($currentPage * $itemsPerPage, $totalProperties);
+                        echo '<div class="mt-4 text-center text-gray-300">';
+                        echo '<p class="text-sm">Showing ' . $startItem . '-' . $endItem . ' of ' . $totalProperties . ' properties</p>';
+                        echo '</div>';
+                    }
                 } else {
                     // Enhanced no properties display
                     echo '<div class="no-properties-container">';
@@ -1121,6 +1254,7 @@ function confirmLogout() {
         url.searchParams.delete('location');
         url.searchParams.delete('bedrooms');
         url.searchParams.delete('maxPrice');
+        url.searchParams.delete('page'); // Reset to page 1 when filters change
         
         if (location) url.searchParams.set('location', location);
         if (bedrooms) url.searchParams.set('bedrooms', bedrooms);
@@ -1140,6 +1274,7 @@ function confirmLogout() {
         url.searchParams.delete('location');
         url.searchParams.delete('bedrooms');
         url.searchParams.delete('maxPrice');
+        url.searchParams.delete('page'); // Reset to page 1 when clearing filters
         
         window.location.href = url.toString();
     }
