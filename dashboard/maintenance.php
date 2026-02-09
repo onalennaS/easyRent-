@@ -218,105 +218,64 @@ function formatCurrency($amount) {
 
         /* Sidebar Styles */
         .sidebar {
-            width: 250px;
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
             position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
             height: 100vh;
-            overflow-y: auto;
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 20px 0;
             z-index: 1000;
+            transition: transform 0.3s ease;
         }
 
-        .sidebar-header {
-            padding: 1.5rem 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .sidebar .logo {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
         }
 
-        .sidebar-logo {
-            font-size: 1.5rem;
+        .sidebar .logo h2 {
+            font-size: 24px;
             font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
         }
 
-        .sidebar-user {
-            padding: 1.5rem 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-
-        .user-info {
-            flex: 1;
-        }
-
-        .user-name {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        .user-role {
-            font-size: 0.8rem;
-            opacity: 0.8;
-        }
-
-        .sidebar-nav {
-            padding: 1rem 0;
-        }
-
-        .nav-item {
+        .sidebar ul {
             list-style: none;
         }
 
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.875rem 1.5rem;
+        .sidebar ul li {
+            margin: 5px 0;
+        }
+
+        .sidebar ul li a {
+            display: block;
+            padding: 15px 25px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
-            border-left: 4px solid transparent;
+            border-left: 3px solid transparent;
         }
 
-        .nav-link:hover,
-        .nav-link.active {
-            background: rgba(255, 255, 255, 0.1);
-            border-left-color: white;
+        .sidebar ul li a:hover,
+        .sidebar ul li a.active {
+            background-color: rgba(255,255,255,0.1);
+            border-left-color: #fff;
         }
 
-        .nav-link i {
+        .sidebar ul li a i {
+            margin-right: 10px;
             width: 20px;
-            text-align: center;
-        }
-
-        .logout-link {
-            margin-top: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 1rem;
         }
 
         /* Main Content */
         .main-content {
             flex: 1;
-            margin-left: 250px;
             padding: 2rem;
-            transition: all 0.3s ease;
+            margin-left: 250px;
+            max-width: calc(100% - 250px);
         }
 
         /* Top Bar */
@@ -325,14 +284,34 @@ function formatCurrency($amount) {
             justify-content: space-between;
             align-items: center;
             margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .landlord-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .landlord-info .avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
         }
 
         .page-title {
             font-size: 1.75rem;
             font-weight: 700;
-            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
         .mobile-menu-btn {
@@ -1035,91 +1014,37 @@ function formatCurrency($amount) {
 </head>
 <body>
     <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
-            </div>
+    <div class="sidebar">
+        <div class="logo">
+            <h2>Easy Rent</h2>
+            <p>Landlord Portal</p>
         </div>
-        
-        <div class="sidebar-user">
-            <div class="user-avatar">
-                <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?>
-            </div>
-            <div class="user-info">
-                <div class="user-name"><?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></div>
-                <div class="user-role">Landlord</div>
-            </div>
-        </div>
-        
-        <ul class="sidebar-nav">
-              <li class="nav-item">
-        <a href="profile_landlord.php" class="nav-link">
-            <i class="fas fa-user"></i>
-            <span>Profile</span>
-        </a>
-    </li>
-            <li class="nav-item">
-                <a href="landlord_dashboard.php" class="nav-link">
-                    <i class="fas fa-th-large"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="my_properties.php" class="nav-link">
-                    <i class="fas fa-building"></i>
-                    <span>My Properties</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="applications.php" class="nav-link">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Applications</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="add_property.php" class="nav-link">
-                    <i class="fas fa-plus-circle"></i>
-                    <span>Add Property</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="maintenance.php" class="nav-link active">
-                    <i class="fas fa-tools"></i>
-                    <span>Maintenance</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="tenants.php" class="nav-link">
-                    <i class="fas fa-users"></i>
-                    <span>Tenants</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="reports.php" class="nav-link">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Reports</span>
-                </a>
-            </li>
-            <li class="nav-item logout-link">
-                <a href="../auth/logout.php" class="nav-link" id="logoutLink">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </li>
+        <ul>
+            <li><a href="../index.php" class="home-button"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="profile_landlord.php"><i class="fas fa-user"></i> Profile</a></li>
+            <li><a href="landlord_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="my_properties.php"><i class="fas fa-building"></i> My Properties</a></li>
+            <li><a href="applications.php"><i class="fas fa-file-alt"></i> Applications</a></li>
+            <li><a href="add_property.php"><i class="fas fa-plus-circle"></i> Add Property</a></li>
+            <li><a href="maintenance.php" class="active"><i class="fas fa-tools"></i> Maintenance</a></li>
+            <li><a href="tenants.php"><i class="fas fa-users"></i> Tenants</a></li>
+            <li><a href="reports.php"><i class="fas fa-chart-line"></i> Reports</a></li>
+            <li><a href="#" onclick="confirmLogout(event)"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
-    </aside>
+    </div>
 
     <!-- Main Content -->
     <div class="main-content">
         <!-- Top Bar -->
         <div class="top-bar">
-            <button class="mobile-menu-btn">
-                <i class="fas fa-bars"></i>
-            </button>
-            <h1 class="page-title">Maintenance Requests</h1>
-            <div></div> <!-- Empty div for spacing -->
+            <h1 class="page-title">
+                <i class="fas fa-tools"></i>
+                Maintenance Requests
+            </h1>
+            <div class="landlord-info">
+                <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></span>
+                <div class="avatar"><?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?></div>
+            </div>
         </div>
 
         <!-- Hero Section -->
@@ -1359,7 +1284,29 @@ function formatCurrency($amount) {
         }
 
         // Logout confirmation
-        document.getElementById('logoutLink').addEventListener('click', function(e) {
+        // Logout confirmation function
+        function confirmLogout(event) {
+            event.preventDefault();
+            
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You will be logged out of your account",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, logout!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
+        }
+        
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', function(e) {
             e.preventDefault(); // prevent default link behavior
 
             Swal.fire({
