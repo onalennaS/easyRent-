@@ -54,6 +54,24 @@ if (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
     }
 }
 
+// Get filter parameters
+$status_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
+$search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Build the WHERE clause based on filters
+$where_conditions = ["l.tenant_id = $tenant_id"];
+
+if ($status_filter !== 'all') {
+    $where_conditions[] = "l.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
+}
+
+if (!empty($search_query)) {
+    $search_escaped = mysqli_real_escape_string($conn, $search_query);
+    $where_conditions[] = "(p.title LIKE '%$search_escaped%' OR p.address LIKE '%$search_escaped%' OR u.first_name LIKE '%$search_escaped%' OR u.last_name LIKE '%$search_escaped%')";
+}
+
+$where_clause = implode(' AND ', $where_conditions);
+
 // Fetch lease information for the tenant
 $lease_query = "
     SELECT
@@ -69,7 +87,7 @@ $lease_query = "
     FROM leases l
     JOIN properties p ON l.property_id = p.id
     JOIN users u ON l.landlord_id = u.id
-    WHERE l.tenant_id = $tenant_id AND l.status = 'active'
+    WHERE $where_clause
     ORDER BY l.lease_start_date DESC
 ";
 
@@ -78,6 +96,24 @@ $leases = [];
 if ($lease_result) {
     while ($row = mysqli_fetch_assoc($lease_result)) {
         $leases[] = $row;
+    }
+}
+
+// Get count of leases by status
+$status_counts = [
+    'all' => 0,
+    'active' => 0,
+    'pending' => 0,
+    'expired' => 0,
+    'terminated' => 0
+];
+
+$count_query = "SELECT status, COUNT(*) as count FROM leases WHERE tenant_id = $tenant_id GROUP BY status";
+$count_result = mysqli_query($conn, $count_query);
+if ($count_result) {
+    while ($row = mysqli_fetch_assoc($count_result)) {
+        $status_counts[$row['status']] = $row['count'];
+        $status_counts['all'] += $row['count'];
     }
 }
 
@@ -243,7 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             align-items: center;
             margin-bottom: 2rem;
             padding-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid #ddd;
         }
 
         .page-title {
@@ -263,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         .tenant-info .avatar {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -272,35 +308,198 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             font-weight: bold;
         }
 
-        /* Lease container */
-        .lease-container {
+        /* Filter Section */
+        .filter-section {
             background: white;
             border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            padding: 25px;
-            margin-bottom: 30px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
 
-        .lease-header {
+        .filter-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #eee;
         }
 
-        .lease-title {
-            font-size: 22px;
-            font-weight: bold;
+        .filter-header h3 {
+            font-size: 1.2rem;
             color: #333;
         }
 
-        .lease-status {
-            padding: 6px 12px;
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
             border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #666;
             font-size: 14px;
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .filter-tab:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .filter-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #764ba2;
+        }
+
+        .filter-tab .badge {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .filter-tab.active .badge {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            max-width: 500px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-box button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .search-box button:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Table Container */
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h3 {
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lease-count {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        /* Table Styles */
+        .lease-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .lease-table thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .lease-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .lease-table td {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        .lease-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .lease-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .lease-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .property-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .property-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .property-address {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
         }
 
         .status-active {
@@ -313,99 +512,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             color: #856404;
         }
 
-        .status-draft {
+        .status-expired {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-terminated {
             background-color: #e2e3e5;
             color: #383d41;
         }
 
-        .lease-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .detail-section {
-            margin-bottom: 20px;
-        }
-
-        .detail-section h3 {
-            font-size: 18px;
-            margin-bottom: 10px;
-            color: #333;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
-        }
-
-        .detail-row {
+        .signature-status {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
         }
 
-        .detail-label {
-            color: #666;
-            font-weight: 500;
+        .signature-status i {
+            font-size: 16px;
         }
 
-        .detail-value {
-            color: #333;
-            font-weight: 500;
+        .signed {
+            color: #28a745;
         }
 
-        .signature-section {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+        .unsigned {
+            color: #dc3545;
         }
 
-        .signature-row {
+        /* Action Buttons */
+        .action-buttons {
             display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
+            gap: 5px;
         }
 
-        .signature-box {
-            width: 48%;
-            text-align: center;
-        }
-
-        .signature-img {
-            max-width: 200px;
-            max-height: 80px;
-            margin-bottom: 10px;
-            border: 1px solid #eee;
-        }
-
-        .signature-label {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .signature-date {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .lease-actions {
-            display: flex;
-            gap: 15px;
-            margin-top: 30px;
-            justify-content: flex-end;
-        }
-
-        /* Buttons */
         .btn {
-            padding: 10px 20px;
+            padding: 8px 12px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.3s ease;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 12px;
         }
 
         .btn-primary {
@@ -415,6 +573,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
         .btn-primary:hover {
             background-color: #0056b3;
+            transform: translateY(-2px);
         }
 
         .btn-success {
@@ -424,6 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
         .btn-success:hover {
             background-color: #218838;
+            transform: translateY(-2px);
         }
 
         .btn-secondary {
@@ -433,21 +593,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
         .btn-secondary:hover {
             background-color: #5a6268;
+            transform: translateY(-2px);
         }
 
-        .btn-danger {
-            background-color: #dc3545;
+        .btn-info {
+            background-color: #17a2b8;
             color: white;
         }
 
-        .btn-danger:hover {
-            background-color: #c82333;
+        .btn-info:hover {
+            background-color: #138496;
+            transform: translateY(-2px);
         }
-#signature-pad {
-    background-color: #fff;
-    border: 1px solid #ddd;
-    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
-}
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+
         /* Modal styles */
         .modal {
             display: none;
@@ -462,12 +643,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
 
         .modal-content {
             background-color: white;
-            margin: 10% auto;
+            margin: 5% auto;
             padding: 30px;
             border-radius: 10px;
-            width: 500px;
+            width: 600px;
             max-width: 90%;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .modal-header {
@@ -475,11 +658,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
         }
 
         .modal-title {
-            font-size: 1.25rem;
+            font-size: 1.5rem;
             font-weight: 600;
+            color: #333;
         }
 
         .close {
@@ -487,6 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             font-weight: bold;
             cursor: pointer;
             color: #aaa;
+            transition: color 0.3s ease;
         }
 
         .close:hover {
@@ -501,23 +688,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         }
 
         #signature-pad {
-            border: 1px solid #ddd;
+            border: 2px solid #ddd;
             background-color: white;
             width: 100%;
             height: 200px;
             touch-action: none;
-            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
-                            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
-                            linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
-                            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: 5px;
         }
 
         .signature-instructions {
             margin-bottom: 15px;
             color: #666;
             text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
         }
 
         .signature-actions {
@@ -527,30 +712,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             margin-top: 15px;
         }
 
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 50px 20px;
-            color: #666;
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .lease-table {
+                font-size: 13px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
         }
 
-        .empty-state i {
-            font-size: 50px;
-            margin-bottom: 20px;
-            color: #ccc;
-        }
-
-        /* Sidebar toggle for mobile */
-        .sidebar-toggle {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #333;
-            cursor: pointer;
-        }
-
-        /* Responsive styles */
         @media (max-width: 768px) {
             .sidebar {
                 width: 200px;
@@ -559,21 +731,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             .main-content {
                 margin-left: 200px;
             }
-            
-            .signature-row {
-                flex-direction: column;
+
+            .filter-tabs {
+                justify-content: center;
             }
-            
-            .signature-box {
-                width: 100%;
-                margin-bottom: 20px;
+
+            .search-box {
+                max-width: 100%;
+            }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Make table scrollable on mobile */
+            .table-container {
+                overflow-x: auto;
+            }
+
+            .lease-table {
+                min-width: 800px;
             }
         }
 
         @media (max-width: 600px) {
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.3s ease;
             }
             
             .sidebar.active {
@@ -582,29 +765,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             
             .main-content {
                 margin-left: 0;
-                padding-top: 70px;
+                padding: 15px;
             }
-            
-            .sidebar-toggle {
-                display: block;
+
+            .page-title {
+                font-size: 1.3rem;
             }
-            
-            .lease-actions {
+
+            .filter-section {
+                padding: 15px;
+            }
+
+            .table-header {
+                padding: 15px;
                 flex-direction: column;
+                align-items: flex-start;
                 gap: 10px;
-            }
-            
-            .btn {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            .modal-content {
-                padding: 20px;
-            }
-            
-            #signature-pad {
-                height: 150px;
             }
         }
     </style>
@@ -618,15 +794,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         </div>
         <ul>
             <li><a href="../index.php"><i class="fas fa-home"></i> Home</a></li>
-             <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
+            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
             <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-           
             <li><a href="browse_properties.php"><i class="fas fa-search"></i> Browse Properties</a></li>
             <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> My Applications</a></li>
             <li><a href="my_lease.php" class="active"><i class="fas fa-file-contract"></i> My Lease</a></li>
             <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
-            
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
@@ -637,14 +811,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
         <div class="top-bar">
             <h1 class="page-title">
                 <i class="fas fa-file-contract"></i>
-                My Lease Agreement
+                My Lease Agreements
             </h1>
             <div class="tenant-info">
                 <span>Hello, <?php echo htmlspecialchars($tenant_name); ?></span>
                 <div class="avatar"><?php echo strtoupper(substr($tenant_name ?? '', 0, 1)); ?></div>
             </div>
         </div>
-        
 
         <?php if (isset($_SESSION['success_message'])): ?>
             <div class="alert alert-success" id="successAlert">
@@ -658,123 +831,170 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             </div>
         <?php endif; ?>
 
-        <?php if (!empty($leases)): ?>
-            <?php foreach ($leases as $lease): ?>
-                <div class="lease-container">
-                    <div class="lease-header">
-                        <div class="lease-title">
-                            Lease Agreement for <?php echo htmlspecialchars($lease['property_title']); ?>
-                        </div>
-                        <div class="lease-status status-<?php echo strtolower($lease['status']); ?>">
-                            <?php echo ucfirst($lease['status']); ?>
-                        </div>
-                    </div>
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="filter-header">
+                <h3><i class="fas fa-filter"></i> Filter Leases</h3>
+            </div>
 
-                    <div class="lease-details">
-                        <div class="detail-section">
-                            <h3>Property Details</h3>
-                            <div class="detail-row">
-                                <span class="detail-label">Property:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($lease['property_title']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Address:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($lease['property_address']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Monthly Rent:</span>
-                                <span class="detail-value">R<?php echo number_format($lease['rent_amount'], 2); ?></span>
-                            </div>
-                        </div>
-
-                        <div class="detail-section">
-                            <h3>Lease Terms</h3>
-                            <div class="detail-row">
-                                <span class="detail-label">Lease Start:</span>
-                                <span class="detail-value"><?php echo date('M j, Y', strtotime($lease['lease_start_date'])); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Lease End:</span>
-                                <span class="detail-value"><?php echo date('M j, Y', strtotime($lease['lease_end_date'])); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Security Deposit:</span>
-                                <span class="detail-value">R<?php echo number_format($lease['security_deposit'], 2); ?></span>
-                            </div>
-                        </div>
-
-                        <div class="detail-section">
-                            <h3>Landlord Information</h3>
-                            <div class="detail-row">
-                                <span class="detail-label">Name:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($lease['landlord_first_name'] . ' ' . $lease['landlord_last_name']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Email:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($lease['landlord_email']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Phone:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($lease['landlord_phone']); ?></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="signature-section">
-                        <h3>Signatures</h3>
-                        <div class="signature-row">
-                            <div class="signature-box">
-                                <div class="signature-label">Landlord Signature</div>
-                                <?php if (!empty($lease['signature_path'])): ?>
-                                    <img src="<?php echo htmlspecialchars($lease['signature_path']); ?>" alt="Landlord Signature" class="signature-img">
-                                    <div class="signature-date">
-                                        Signed on <?php echo date('M j, Y', strtotime($lease['signed_date'])); ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div style="height: 80px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                        Not signed yet
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                            <div class="signature-box">
-                                <div class="signature-label">Tenant Signature</div>
-                                <?php if (!empty($lease['tenant_signature_path'])): ?>
-                                    <img src="<?php echo htmlspecialchars($lease['tenant_signature_path']); ?>" alt="Tenant Signature" class="signature-img">
-                                    <div class="signature-date">
-                                        Signed on <?php echo date('M j, Y', strtotime($lease['tenant_signed_date'])); ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div style="height: 80px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                        Not signed yet
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="lease-actions">
-                        <a href="download_lease.php?id=<?php echo $lease['id']; ?>" class="btn btn-secondary">
-                            <i class="fas fa-download"></i> Download Lease
-                        </a>
-                        <a href="view_lease.php?id=<?php echo $lease['id']; ?>" class="btn btn-primary">
-                            <i class="fas fa-file-alt"></i> View Full Lease
-                        </a>
-                        <?php if (empty($lease['tenant_signature_path']) && !empty($lease['signature_path'])): ?>
-                            <button class="btn btn-success sign-lease-btn" data-lease-id="<?php echo $lease['id']; ?>">
-                                <i class="fas fa-signature"></i> Sign Lease
-                            </button>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="empty-state">
-                <i class="fas fa-file-contract"></i>
-                <h3>No Lease Agreements Found</h3>
-                <p>You don't have any active lease agreements yet. Once your application is approved, your lease will appear here.</p>
-                <a href="my_applications.php" class="btn btn-primary" style="margin-top: 20px;">
-                    <i class="fas fa-file-alt"></i> View My Applications
+            <!-- Status Filter Tabs -->
+            <div class="filter-tabs">
+                <a href="?status=all<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'all' ? 'active' : ''; ?>">
+                    All Leases
+                    <span class="badge"><?php echo $status_counts['all']; ?></span>
                 </a>
+                <a href="?status=active<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'active' ? 'active' : ''; ?>">
+                    <i class="fas fa-check-circle"></i> Active
+                    <span class="badge"><?php echo $status_counts['active']; ?></span>
+                </a>
+                <a href="?status=pending<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'pending' ? 'active' : ''; ?>">
+                    <i class="fas fa-clock"></i> Pending
+                    <span class="badge"><?php echo $status_counts['pending']; ?></span>
+                </a>
+                <a href="?status=expired<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'expired' ? 'active' : ''; ?>">
+                    <i class="fas fa-calendar-times"></i> Expired
+                    <span class="badge"><?php echo $status_counts['expired']; ?></span>
+                </a>
+                <a href="?status=terminated<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'terminated' ? 'active' : ''; ?>">
+                    <i class="fas fa-ban"></i> Terminated
+                    <span class="badge"><?php echo $status_counts['terminated']; ?></span>
+                </a>
+            </div>
+
+            <!-- Search Box -->
+            <form method="GET" action="" class="search-box">
+                <input type="hidden" name="status" value="<?php echo htmlspecialchars($status_filter); ?>">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Search by property, address, or landlord..." 
+                       value="<?php echo htmlspecialchars($search_query); ?>">
+                <button type="submit">
+                    <i class="fas fa-search"></i> Search
+                </button>
+                <?php if (!empty($search_query)): ?>
+                    <a href="?status=<?php echo htmlspecialchars($status_filter); ?>" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+        </div>
+
+        <!-- Leases Table -->
+        <?php if (!empty($leases)): ?>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>
+                        <i class="fas fa-list"></i>
+                        Lease Agreements
+                    </h3>
+                    <span class="lease-count"><?php echo count($leases); ?> Lease(s) Found</span>
+                </div>
+                <table class="lease-table">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Landlord</th>
+                            <th>Lease Period</th>
+                            <th>Rent Amount</th>
+                            <th>Status</th>
+                            <th>Signatures</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($leases as $lease): ?>
+                            <tr>
+                                <td>
+                                    <div class="property-info">
+                                        <div class="property-title">
+                                            <?php echo htmlspecialchars($lease['property_title']); ?>
+                                        </div>
+                                        <div class="property-address">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <?php echo htmlspecialchars($lease['property_address']); ?>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong><?php echo htmlspecialchars($lease['landlord_first_name'] . ' ' . $lease['landlord_last_name']); ?></strong>
+                                    </div>
+                                    <div style="font-size: 12px; color: #666;">
+                                        <?php echo htmlspecialchars($lease['landlord_email']); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="font-size: 13px;">
+                                        <div><strong>Start:</strong> <?php echo date('M j, Y', strtotime($lease['lease_start_date'])); ?></div>
+                                        <div><strong>End:</strong> <?php echo date('M j, Y', strtotime($lease['lease_end_date'])); ?></div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong style="color: #28a745; font-size: 15px;">
+                                        R<?php echo number_format($lease['rent_amount'], 2); ?>
+                                    </strong>
+                                    <div style="font-size: 11px; color: #666;">per month</div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-<?php echo strtolower($lease['status']); ?>">
+                                        <?php echo ucfirst($lease['status']); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="signature-status <?php echo !empty($lease['signature_path']) ? 'signed' : 'unsigned'; ?>">
+                                        <i class="fas fa-<?php echo !empty($lease['signature_path']) ? 'check-circle' : 'times-circle'; ?>"></i>
+                                        Landlord
+                                    </div>
+                                    <div class="signature-status <?php echo !empty($lease['tenant_signature_path']) ? 'signed' : 'unsigned'; ?>">
+                                        <i class="fas fa-<?php echo !empty($lease['tenant_signature_path']) ? 'check-circle' : 'times-circle'; ?>"></i>
+                                        Tenant
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="view_lease_tenant.php?id=<?php echo $lease['id']; ?>" 
+                                           class="btn btn-info btn-sm">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        <a href="download_lease.php?id=<?php echo $lease['id']; ?>" 
+                                           class="btn btn-secondary btn-sm">
+                                            <i class="fas fa-download"></i> Download
+                                        </a>
+                                        <?php if (empty($lease['tenant_signature_path']) && !empty($lease['signature_path'])): ?>
+                                            <button class="btn btn-success btn-sm sign-lease-btn" 
+                                                    data-lease-id="<?php echo $lease['id']; ?>">
+                                                <i class="fas fa-signature"></i> Sign
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="table-container">
+                <div class="empty-state">
+                    <i class="fas fa-file-contract"></i>
+                    <h3>No Lease Agreements Found</h3>
+                    <?php if (!empty($search_query) || $status_filter !== 'all'): ?>
+                        <p>No leases match your current filters. Try adjusting your search or filter criteria.</p>
+                        <a href="my_lease.php" class="btn btn-primary" style="margin-top: 20px;">
+                            <i class="fas fa-redo"></i> Clear All Filters
+                        </a>
+                    <?php else: ?>
+                        <p>You don't have any lease agreements yet. Once your application is approved, your lease will appear here.</p>
+                        <a href="my_applications.php" class="btn btn-primary" style="margin-top: 20px;">
+                            <i class="fas fa-file-alt"></i> View My Applications
+                        </a>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endif; ?>
     </div>
@@ -783,7 +1003,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
     <div id="signLeaseModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Sign Lease Agreement</h3>
+                <h3 class="modal-title"><i class="fas fa-signature"></i> Sign Lease Agreement</h3>
                 <span class="close" onclick="closeSignModal()">&times;</span>
             </div>
             <form id="signLeaseForm" method="POST">
@@ -792,7 +1012,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                 <input type="hidden" id="signature" name="signature" value="">
                 
                 <div class="signature-instructions">
-                    <p>Please sign your name in the box below using your mouse or finger</p>
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Please sign your name in the box below using your mouse or finger</strong>
                 </div>
                 
                 <div class="signature-pad-container">
@@ -803,13 +1024,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                     <button type="button" id="clearSignature" class="btn btn-secondary">
                         <i class="fas fa-undo"></i> Clear
                     </button>
-                    <button type="button" id="saveSignature" class="btn btn-success">
+                    <button type="button" id="saveSignature" class="btn btn-info">
                         <i class="fas fa-save"></i> Save Signature
                     </button>
                 </div>
                 
-                <div class="form-group" style="margin-top: 20px;">
-                    <button type="submit" class="btn btn-primary" style="width: 100%;" disabled id="signLeaseBtn">
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn btn-success" style="width: 100%;" disabled id="signLeaseBtn">
                         <i class="fas fa-check-circle"></i> Confirm and Sign Lease
                     </button>
                 </div>
@@ -820,39 +1041,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
     <script>
         // Initialize signature pad
         let signaturePad;
-        
-        function initSignaturePad() {
-            const canvas = document.getElementById('signature-pad');
-            signaturePad = new SignaturePad(canvas, {
-                backgroundColor: 'rgba(255, 255, 255, 0)',
-                penColor: 'rgb(0, 0, 0)',
-                minWidth: 1.5,
-                maxWidth: 3,
-                velocityFilterWeight: 0.7,
-                throttle: 16
-            });
-
-            // Handle signature pad resizing
-            function resizeCanvas() {
-                const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                canvas.width = canvas.offsetWidth * ratio;
-                canvas.height = canvas.offsetHeight * ratio;
-                canvas.getContext('2d').scale(ratio, ratio);
-                signaturePad.clear();
-            }
-
-            window.addEventListener('resize', resizeCanvas);
-            resizeCanvas();
-
-            // Enable touch support
-            canvas.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-            });
-
-            return signaturePad;
-        }
-
-        // Initialize when modal opens
         function openSignModal() {
             document.getElementById('signLeaseModal').style.display = 'block';
             setTimeout(() => {
@@ -866,6 +1054,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
                     setTimeout(() => alert.style.display = 'none', 300);
                 });
             }, 100);
+        }
+
+        function closeSignModal() {
+            document.getElementById('signLeaseModal').style.display = 'none';
         }
 
         // Clear signature
@@ -924,22 +1116,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['sign_lease'])) {
             });
         });
 
-        // Modal functions
-        function closeSignModal() {
-            document.getElementById('signLeaseModal').style.display = 'none';
-        }
-
         // Close modal when clicking outside
         window.onclick = function(event) {
             if (event.target === document.getElementById('signLeaseModal')) {
                 closeSignModal();
             }
-        }
-
-        // Sidebar toggle for mobile
-        function toggleSidebar() {
-            const sidebar = document.querySelector('.sidebar');
-            sidebar.classList.toggle('active');
         }
 
         // Auto-hide alerts after 5 seconds

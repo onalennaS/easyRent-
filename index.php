@@ -348,8 +348,8 @@ if ($isLoggedIn) {
         }
 
         .mobile-nav-item:hover {
-            background-color: #f9fafb;
-            color: #3b82f6;
+            background-color: #3b82f6;
+            color: white;
         }
 
         .mobile-nav-user-section {
@@ -671,12 +671,14 @@ if ($isLoggedIn) {
                     <i class="fas fa-user-circle mr-2"></i>
                     <?php echo htmlspecialchars($username); ?>
                 </div>
-                
+
                 <!-- Dashboard Link -->
-                
-                
-               
-                
+                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="mobile-nav-item" onclick="closeMobileNav()">
+                    <?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
+                </a>
+
+
+
                 <a href="#" onclick="confirmLogout(); return false;" class="mobile-nav-item text-red-600 hover:bg-red-50">
                     <i class="fas fa-sign-out-alt mr-3"></i>Logout
                 </a>
@@ -717,8 +719,8 @@ if ($isLoggedIn) {
                 
                 <!-- Show Dashboard link when logged in -->
                 <?php if($isLoggedIn): ?>
-                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold">
-                    <i class="fas fa-tachometer-alt mr-2"></i><?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
+                <a href="<?php echo $userRole === 'tenant' ? 'dashboard/tenant_dashboard.php' : 'dashboard/landlord_dashboard.php'; ?>" class="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                    <?php echo $userRole === 'tenant' ? 'Tenant Dashboard' : 'Landlord Dashboard'; ?>
                 </a>
                 <?php endif; ?>
             </div>

@@ -209,6 +209,7 @@ function generateLeaseHTML($lease, $content, $isPDF = false) {
             margin: 0 auto;
             background: white;
             padding: 40px;
+            border: 1px solid #000;
         }
         
         .header {

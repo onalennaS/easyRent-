@@ -1,8 +1,8 @@
 <?php
 session_start();
 
-// Redirect if not logged in
-if (!isset($_SESSION['user_id'])) {
+// Redirect if not logged in or not a tenant
+if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'tenant') {
     header("Location: ../auth/login.php");
     exit();
 }
@@ -22,14 +22,14 @@ if (!$conn) {
 
 // Get lease ID from URL
 if (!isset($_GET['id'])) {
-    header("Location: tenants.php");
+    header("Location: my_lease.php");
     exit();
 }
 
 $lease_id = (int)$_GET['id'];
-$user_id = (int)$_SESSION['user_id'];
+$tenant_id = (int)$_SESSION['user_id'];
 
-// Fetch lease details
+// Fetch lease details - ensure it belongs to this tenant
 $lease_query = "
     SELECT 
         l.*,
@@ -38,10 +38,10 @@ $lease_query = "
         p.description AS property_description,
         lt.template_name,
         lt.content AS template_content,
-        TRIM(CONCAT(COALESCE(landlord.first_name, ''), ' ', COALESCE(landlord.last_name, ''))) AS landlord_name,
+        CONCAT(landlord.first_name, ' ', landlord.last_name) AS landlord_name,
         landlord.email AS landlord_email,
         landlord.phone AS landlord_phone,
-        TRIM(CONCAT(COALESCE(tenant.first_name, ''), ' ', COALESCE(tenant.last_name, ''))) AS tenant_name,
+        CONCAT(tenant.first_name, ' ', tenant.last_name) AS tenant_name,
         tenant.email AS tenant_email,
         tenant.phone AS tenant_phone,
         l.signed_date AS landlord_signed_date,
@@ -52,13 +52,14 @@ $lease_query = "
     JOIN users landlord ON l.landlord_id = landlord.id
     JOIN users tenant ON l.tenant_id = tenant.id
     WHERE l.id = $lease_id
-    AND (l.landlord_id = $user_id OR l.tenant_id = $user_id)
+    AND l.tenant_id = $tenant_id
 ";
 
 $lease_result = mysqli_query($conn, $lease_query);
 
 if (!$lease_result || mysqli_num_rows($lease_result) === 0) {
-    header("Location: tenants.php");
+    $_SESSION['error_message'] = "Lease not found or you don't have permission to view it.";
+    header("Location: my_lease.php");
     exit();
 }
 
@@ -75,7 +76,7 @@ $replacements = [
     '[PROPERTY_ADDRESS]' => $lease['property_address'],
     '[START_DATE]' => date('F j, Y', strtotime($lease['lease_start_date'])),
     '[END_DATE]' => date('F j, Y', strtotime($lease['lease_end_date'])),
-    '[RENT_AMOUNT]' => number_format($lease['monthly_rent'] ?? 0, 2),
+    '[RENT_AMOUNT]' => number_format($lease['monthly_rent'] ?? $lease['rent_amount'] ?? 0, 2),
     '[DEPOSIT_AMOUNT]' => number_format($lease['security_deposit'], 2)
 ];
 
@@ -88,47 +89,12 @@ if (!empty($lease['terms'])) {
     $content .= "\n\n<h4>Additional Terms</h4>\n<p>" . nl2br(htmlspecialchars($lease['terms'])) . "</p>";
 }
 
-// Generate default content if template is empty
-if (empty($content)) {
-    $content = generateDefaultLeaseContent($lease);
-}
-
-// Check if the current user is the landlord
-$is_landlord = ($_SESSION['user_id'] == $lease['landlord_id']);
-
-// Get landlord name for header
-$landlord_name = '';
+// Get tenant name for header
+$tenant_name = '';
 if (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
-    $landlord_name = $_SESSION['user_name'];
+    $tenant_name = $_SESSION['user_name'];
 } else {
-    $landlord_name = $lease['landlord_name'];
-}
-
-function generateDefaultLeaseContent($lease) {
-    return '<h2>RESIDENTIAL LEASE AGREEMENT</h2>
-    
-    <p><strong>This Lease Agreement</strong> is made on ' . date('F j, Y', strtotime($lease['created_at'])) . '</p>
-    
-    <h3>BETWEEN</h3>
-    <p><strong>Landlord:</strong> ' . htmlspecialchars($lease['landlord_name']) . '<br>
-    <strong>Email:</strong> ' . htmlspecialchars($lease['landlord_email']) . '<br>
-    <strong>Phone:</strong> ' . htmlspecialchars($lease['landlord_phone'] ?? 'Not provided') . '</p>
-    
-    <p><strong>AND</strong></p>
-    
-    <p><strong>Tenant:</strong> ' . htmlspecialchars($lease['tenant_name']) . '<br>
-    <strong>Email:</strong> ' . htmlspecialchars($lease['tenant_email']) . '<br>
-    <strong>Phone:</strong> ' . htmlspecialchars($lease['tenant_phone'] ?? 'Not provided') . '</p>
-    
-    <h3>PROPERTY DETAILS</h3>
-    <p><strong>Property Address:</strong> ' . htmlspecialchars($lease['property_address']) . '</p>
-    <p><strong>Property Description:</strong> ' . htmlspecialchars($lease['property_description'] ?? 'Not provided') . '</p>
-    
-    <h3>LEASE TERMS</h3>
-    <p><strong>Lease Start Date:</strong> ' . date('F j, Y', strtotime($lease['lease_start_date'])) . '</p>
-    <p><strong>Lease End Date:</strong> ' . date('F j, Y', strtotime($lease['lease_end_date'])) . '</p>
-    <p><strong>Monthly Rent:</strong> R' . number_format($lease['monthly_rent'] ?? 0, 2) . '</p>
-    <p><strong>Security Deposit:</strong> R' . number_format($lease['security_deposit'], 2) . '</p>';
+    $tenant_name = $lease['tenant_name'];
 }
 ?>
 
@@ -160,7 +126,7 @@ function generateDefaultLeaseContent($lease) {
             top: 0;
             width: 250px;
             height: 100vh;
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
             color: white;
             padding: 20px 0;
             z-index: 1000;
@@ -258,12 +224,12 @@ function generateDefaultLeaseContent($lease) {
         }
 
         .btn-primary {
-            background: #3b82f6;
+            background: #667eea;
             color: white;
         }
 
         .btn-primary:hover {
-            background: #1d4ed8;
+            background: #5568d3;
         }
 
         .btn-secondary {
@@ -273,6 +239,31 @@ function generateDefaultLeaseContent($lease) {
 
         .btn-secondary:hover {
             background: #e2e8f0;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-expired {
+            background-color: #f8d7da;
+            color: #721c24;
         }
 
         /* Lease Meta Cards */
@@ -427,17 +418,17 @@ function generateDefaultLeaseContent($lease) {
     <div class="sidebar">
         <div class="logo">
             <h2>Easy Rent</h2>
-            <p>Landlord Portal</p>
+            <p>Tenant Portal</p>
         </div>
         <ul>
             <li><a href="../index.php"><i class="fas fa-home"></i> Home</a></li>
-            <li><a href="landlord_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-            <li><a href="properties.php"><i class="fas fa-building"></i> Properties</a></li>
-            <li><a href="tenants.php" class="active"><i class="fas fa-users"></i> Tenants</a></li>
-            <li><a href="applications.php"><i class="fas fa-file-alt"></i> Applications</a></li>
-            <li><a href="leases.php"><i class="fas fa-file-contract"></i> Leases</a></li>
-            <li><a href="maintenance.php"><i class="fas fa-tools"></i> Maintenance</a></li>
-            <li><a href="payments.php"><i class="fas fa-credit-card"></i> Payments</a></li>
+            <li><a href="tenant_profile.php"><i class="fas fa-user"></i> Profile</a></li>
+            <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="browse_properties.php"><i class="fas fa-search"></i> Browse Properties</a></li>
+            <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> My Applications</a></li>
+            <li><a href="my_lease.php" class="active"><i class="fas fa-file-contract"></i> My Lease</a></li>
+            <li><a href="maintenance_requests.php"><i class="fas fa-tools"></i> Maintenance</a></li>
+            <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> Payments</a></li>
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
@@ -451,34 +442,66 @@ function generateDefaultLeaseContent($lease) {
                     <a href="download_lease.php?id=<?php echo $lease_id; ?>" class="btn btn-primary">
                         <i class="fas fa-download"></i> Download Lease
                     </a>
-                    <a href="tenants.php" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to Tenants
+                    <a href="my_lease.php" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Leases
                     </a>
                 </div>
             </div>
 
             <div class="lease-meta">
                 <div class="meta-card">
-                    <div class="meta-title">Property</div>
+                    <i class="fas fa-building meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-home"></i> Property</div>
                     <div class="meta-value"><?php echo htmlspecialchars($lease['property_title']); ?></div>
-                </div>
-
-                <div class="meta-card">
-                    <div class="meta-title">Tenant</div>
-                    <div class="meta-value"><?php echo htmlspecialchars($lease['tenant_name']); ?></div>
-                </div>
-
-                <div class="meta-card">
-                    <div class="meta-title">Lease Period</div>
-                    <div class="meta-value">
-                        <?php echo date('M j, Y', strtotime($lease['lease_start_date'])); ?> - 
-                        <?php echo date('M j, Y', strtotime($lease['lease_end_date'])); ?>
+                    <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #64748b;">
+                        <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($lease['property_address']); ?>
                     </div>
                 </div>
 
                 <div class="meta-card">
-                    <div class="meta-title">Monthly Rent</div>
-                    <div class="meta-value">R<?php echo number_format($lease['monthly_rent'] ?? 0, 2); ?></div>
+                    <i class="fas fa-user-tie meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-user-shield"></i> Landlord</div>
+                    <div class="meta-value"><?php echo htmlspecialchars($lease['landlord_name']); ?></div>
+                    <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #64748b;">
+                        <i class="fas fa-envelope"></i> <?php echo htmlspecialchars($lease['landlord_email']); ?>
+                    </div>
+                </div>
+
+                <div class="meta-card">
+                    <i class="fas fa-calendar meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-calendar-alt"></i> Lease Period</div>
+                    <div class="meta-value">
+                        <?php echo date('M j, Y', strtotime($lease['lease_start_date'])); ?>
+                    </div>
+                    <div style="margin-top: 0.25rem; font-size: 0.9rem; color: #64748b;">
+                        to <?php echo date('M j, Y', strtotime($lease['lease_end_date'])); ?>
+                    </div>
+                </div>
+
+                <div class="meta-card">
+                    <i class="fas fa-money-bill-wave meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-dollar-sign"></i> Monthly Rent</div>
+                    <div class="meta-value" style="color: #10b981;">
+                        R<?php echo number_format($lease['monthly_rent'] ?? $lease['rent_amount'] ?? 0, 2); ?>
+                    </div>
+                </div>
+
+                <div class="meta-card">
+                    <i class="fas fa-shield-alt meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-lock"></i> Security Deposit</div>
+                    <div class="meta-value">
+                        R<?php echo number_format($lease['security_deposit'], 2); ?>
+                    </div>
+                </div>
+
+                <div class="meta-card">
+                    <i class="fas fa-info-circle meta-icon"></i>
+                    <div class="meta-title"><i class="fas fa-flag"></i> Status</div>
+                    <div class="meta-value">
+                        <span class="status-badge status-<?php echo strtolower($lease['status']); ?>">
+                            <?php echo ucfirst($lease['status']); ?>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -508,7 +531,7 @@ function generateDefaultLeaseContent($lease) {
                     <h2>LEASE TERMS</h2>
                     <p><strong>Lease Start Date:</strong> <?php echo date('F j, Y', strtotime($lease['lease_start_date'])); ?></p>
                     <p><strong>Lease End Date:</strong> <?php echo date('F j, Y', strtotime($lease['lease_end_date'])); ?></p>
-                    <p><strong>Monthly Rent:</strong> R<?php echo number_format($lease['monthly_rent'] ?? 0, 2); ?></p>
+                    <p><strong>Monthly Rent:</strong> R<?php echo number_format($lease['monthly_rent'] ?? $lease['rent_amount'] ?? 0, 2); ?></p>
                     <p><strong>Security Deposit:</strong> R<?php echo number_format($lease['security_deposit'], 2); ?></p>
                     
                     <?php if (!empty($lease['terms'])): ?>
@@ -518,42 +541,99 @@ function generateDefaultLeaseContent($lease) {
                 <?php endif; ?>
 
                 <div class="signature-section">
-                    <h3>Signatures</h3>
+                    <h3><i class="fas fa-pen-fancy"></i> Signatures</h3>
                     <div class="signature-line">
                         <div class="signature-block">
-                            <div class="signature-label">Landlord Signature</div>
-                            <?php if (!empty($lease['signature_path'])): ?>
-                                <div class="signature-img">
+                            <div class="signature-label">
+                                <i class="fas fa-user-tie"></i> Landlord Signature
+                            </div>
+                            <div class="signature-img">
+                                <?php if (!empty($lease['signature_path'])): ?>
                                     <img src="<?php echo htmlspecialchars($lease['signature_path']); ?>" alt="Landlord Signature">
+                                <?php else: ?>
+                                    <span style="color: #94a3b8;">Signature pending</span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if (!empty($lease['signature_path'])): ?>
+                                <div class="signature-status signed">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Signed</span>
                                 </div>
                                 <div class="signature-date">
-                                    Signed on: <?php echo !empty($lease['landlord_signed_date']) ? date('M j, Y', strtotime($lease['landlord_signed_date'])) : 'Date not available'; ?>
+                                    <i class="fas fa-calendar"></i>
+                                    <?php echo !empty($lease['landlord_signed_date']) ? date('F j, Y \a\t g:i A', strtotime($lease['landlord_signed_date'])) : 'Date not available'; ?>
                                 </div>
                             <?php else: ?>
-                                <div style="height: 80px; border-bottom: 1px solid #94a3b8;"></div>
-                                <div class="signature-date">Not signed yet</div>
+                                <div class="signature-status unsigned">
+                                    <i class="fas fa-times-circle"></i>
+                                    <span>Not signed yet</span>
+                                </div>
                             <?php endif; ?>
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                                <strong><?php echo htmlspecialchars($lease['landlord_name']); ?></strong><br>
+                                <span style="font-size: 0.85rem; color: #64748b;">Landlord</span>
+                            </div>
                         </div>
 
                         <div class="signature-block">
-                            <div class="signature-label">Tenant Signature</div>
-                            <?php if (!empty($lease['tenant_signature_path'])): ?>
-                                <div class="signature-img">
+                            <div class="signature-label">
+                                <i class="fas fa-user"></i> Tenant Signature
+                            </div>
+                            <div class="signature-img">
+                                <?php if (!empty($lease['tenant_signature_path'])): ?>
                                     <img src="<?php echo htmlspecialchars($lease['tenant_signature_path']); ?>" alt="Tenant Signature">
+                                <?php else: ?>
+                                    <span style="color: #94a3b8;">Signature pending</span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if (!empty($lease['tenant_signature_path'])): ?>
+                                <div class="signature-status signed">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Signed</span>
                                 </div>
                                 <div class="signature-date">
-                                    Signed on: <?php echo !empty($lease['tenant_signed_date']) ? date('M j, Y', strtotime($lease['tenant_signed_date'])) : 'Date not available'; ?>
+                                    <i class="fas fa-calendar"></i>
+                                    <?php echo !empty($lease['tenant_signed_date']) ? date('F j, Y \a\t g:i A', strtotime($lease['tenant_signed_date'])) : 'Date not available'; ?>
                                 </div>
                             <?php else: ?>
-                                <div style="height: 80px; border-bottom: 1px solid #94a3b8;"></div>
-                                <div class="signature-date">Not signed yet</div>
+                                <div class="signature-status unsigned">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span>Awaiting your signature</span>
+                                </div>
+                                <div style="margin-top: 1rem;">
+                                    <a href="my_lease.php" class="btn btn-success" style="width: 100%;">
+                                        <i class="fas fa-signature"></i> Sign Lease Now
+                                    </a>
+                                </div>
                             <?php endif; ?>
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                                <strong><?php echo htmlspecialchars($lease['tenant_name']); ?></strong><br>
+                                <span style="font-size: 0.85rem; color: #64748b;">Tenant</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        }
+
+        // Auto-hide alerts
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 300);
+                }, 8000);
+            });
+        });
+    </script>
 </body>
 </html>
 <?php
