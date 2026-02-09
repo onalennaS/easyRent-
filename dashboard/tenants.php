@@ -34,9 +34,9 @@ if (isset($_SESSION['success_message'])) {
 // - All tenants with signed/active leases (regardless of application status)
 // - Any tenants that already have a lease (any non-terminated status)
 $approved_tenants_query = "
-    SELECT 
+    SELECT
         u.id AS tenant_id,
-        CONCAT(u.first_name, ' ', u.last_name) AS tenant_name,
+        COALESCE(tp.full_name, CONCAT(u.first_name, ' ', u.last_name)) AS tenant_name,
         u.email AS tenant_email,
         u.phone AS tenant_phone,
         p.title AS property_title,
@@ -53,23 +53,24 @@ $approved_tenants_query = "
         l.status AS lease_status,
         l.signed_date,
         l.signature_path,
-        (SELECT COUNT(*) FROM rental_applications a2 
+        (SELECT COUNT(*) FROM rental_applications a2
          WHERE a2.tenant_id = u.id AND a2.status = 'approved') AS approved_app_count
     FROM rental_applications a
     JOIN properties p ON a.property_id = p.id
     JOIN users u ON a.tenant_id = u.id
+    LEFT JOIN tenant_profiles tp ON u.id = tp.tenant_id
     LEFT JOIN leases l ON a.id = l.application_id
     WHERE p.landlord_id = $landlord_id
     AND (
         a.status = 'approved'
         OR (l.id IS NOT NULL AND l.status != 'terminated')
     )
-    
+
     UNION
-    
-    SELECT 
+
+    SELECT
         u.id AS tenant_id,
-        CONCAT(u.first_name, ' ', u.last_name) AS tenant_name,
+        COALESCE(tp.full_name, CONCAT(u.first_name, ' ', u.last_name)) AS tenant_name,
         u.email AS tenant_email,
         u.phone AS tenant_phone,
         p.title AS property_title,
@@ -86,17 +87,18 @@ $approved_tenants_query = "
         l.status AS lease_status,
         l.signed_date,
         l.signature_path,
-        (SELECT COUNT(*) FROM rental_applications a2 
+        (SELECT COUNT(*) FROM rental_applications a2
          WHERE a2.tenant_id = u.id AND a2.status = 'approved') AS approved_app_count
     FROM leases l
     JOIN properties p ON l.property_id = p.id
     JOIN users u ON l.tenant_id = u.id
+    LEFT JOIN tenant_profiles tp ON u.id = tp.tenant_id
     LEFT JOIN rental_applications a ON l.application_id = a.id
     WHERE p.landlord_id = $landlord_id
     AND l.status = 'active'
     AND (a.id IS NULL OR a.status != 'approved')
-    
-    ORDER BY 
+
+    ORDER BY
         tenant_name ASC,
         application_date DESC,
         CASE WHEN lease_status = 'active' THEN 0 ELSE 1 END ASC
@@ -146,6 +148,22 @@ if ($templates_result) {
         $templates[] = $row;
     }
 }
+
+// Calculate statistics
+$stats_query = "SELECT 
+    COUNT(DISTINCT u.id) AS total_tenants,
+    SUM(CASE WHEN l.status = 'pending' THEN 1 ELSE 0 END) AS pending_leases,
+    SUM(CASE WHEN l.status = 'active' THEN 1 ELSE 0 END) AS active_leases,
+    SUM(CASE WHEN a.status = 'approved' AND l.id IS NULL THEN 1 ELSE 0 END) AS approved_no_lease
+    FROM rental_applications a
+    JOIN properties p ON a.property_id = p.id
+    JOIN users u ON a.tenant_id = u.id
+    LEFT JOIN leases l ON a.id = l.application_id
+    WHERE p.landlord_id = $landlord_id
+    AND (a.status = 'approved' OR (l.id IS NOT NULL AND l.status != 'terminated'))";
+
+$stats_result = mysqli_query($conn, $stats_query);
+$stats = mysqli_fetch_assoc($stats_result);
 
 // Handle lease creation form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_lease'])) {
@@ -373,7 +391,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
 }
 ?>
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -389,20 +406,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['terminate_lease'])) {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
     <style>
-       
         * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f5f5f5;
-    color: #333;
-}
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
+        }
 
-        /* Sidebar */
+        /* Sidebar Styles */
         .sidebar {
             position: fixed;
             left: 0;
@@ -416,965 +435,926 @@ body {
             transition: transform 0.3s ease;
         }
 
-.sidebar .logo {
-    text-align: center;
-    padding: 20px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    margin-bottom: 30px;
-}
-
-.sidebar .logo h2 {
-    font-size: 24px;
-    font-weight: bold;
-}
-
-.sidebar ul {
-    list-style: none;
-}
-
-.sidebar ul li {
-    margin: 5px 0;
-}
-
-.sidebar ul li a {
-    display: block;
-    padding: 15px 25px;
-    color: white;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    border-left: 3px solid transparent;
-}
-
-.sidebar ul li a:hover,
-.sidebar ul li a.active {
-    background-color: rgba(255,255,255,0.1);
-    border-left-color: #fff;
-}
-
-.sidebar ul li a i {
-    margin-right: 10px;
-    width: 20px;
-}
-
-/* Main Content */
-.main-content {
-    flex: 1;
-    padding: 2rem;
-    margin-left: 250px;
-    max-width: calc(100% - 250px);
-}
-
-/* Top Bar */
-.top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.landlord-info {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.landlord-info .avatar {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-}
-
-.page-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.mobile-menu-btn {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: #64748b;
-    cursor: pointer;
-}
-
-/* Page Header */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.header-buttons {
-    display: flex;
-    gap: 1rem;
-}
-
-.btn {
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    border: none;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-}
-
-.btn-primary {
-    background: #3b82f6;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #1d4ed8;
-}
-
-.btn-success {
-    background: #10b981;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #059669;
-}
-
-.btn-secondary {
-    background: #f1f5f9;
-    color: #475569;
-}
-
-.btn-secondary:hover {
-    background: #e2e8f0;
-}
-
-.btn-danger {
-    background: #ef4444;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #dc2626;
-}
-
-.btn-terminated {
-    background-color: #6b7280;
-    color: white;
-}
-
-.btn-terminated:hover {
-    background-color: #4b5563;
-}
-
-/* Table Styles */
-.tenant-table-container {
-    overflow-x: auto;
-    margin-bottom: 2rem;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid #e5e7eb;
-}
-
-.tenant-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.tenant-table th {
-    background-color: #f1f5f9;
-    padding: 1rem;
-    text-align: left;
-    font-weight: 600;
-    color: #1e293b;
-    border-bottom: 2px solid #e2e8f0;
-}
-
-.tenant-table td {
-    padding: 1rem;
-    border-bottom: 1px solid #f1f5f9;
-    vertical-align: top;
-}
-
-.tenant-table tr:last-child td {
-    border-bottom: none;
-}
-
-.tenant-table tr:hover {
-    background-color: #f8fafc;
-}
-
-.tenant-info-cell {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.tenant-avatar-small {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    flex-shrink: 0;
-}
-
-.tenant-id {
-    font-size: 0.8rem;
-    color: #64748b;
-    margin-top: 0.25rem;
-}
-
-.property-title {
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-}
-
-.property-address {
-    font-size: 0.85rem;
-    color: #64748b;
-}
-
-.table-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.table-actions .btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-}
-
-/* Status styles */
-.lease-status {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.status-draft {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.status-signed,
-.status-active {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.status-pending {
-    background: #dbeafe;
-    color: #1e40af;
-}
-
-/* Modals */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 1001;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-}
-
-.modal-content {
-    background: white;
-    border-radius: 16px;
-    width: 100%;
-    max-width: 800px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 50px rgba(0,0,0,0.2);
-}
-
-.modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.close-modal {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #94a3b8;
-}
-
-.modal-body {
-    padding: 2rem;
-    line-height: 1.8;
-}
-
-.form-group {
-    margin-bottom: 1.8rem;
-}
-
-.form-label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: #1e293b;
-}
-
-.form-control {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
-}
-
-.form-control:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-}
-
-textarea.form-control {
-    min-height: 200px;
-    resize: vertical;
-}
-
-/* Template Styles */
-.template-section {
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.template-section h5 {
-    color: #1e293b;
-    font-weight: 600;
-}
-
-.placeholder-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 0.75rem;
-    margin-top: 1rem;
-}
-
-.placeholder-item {
-    background: #f8fafc;
-    padding: 0.75rem;
-    border-radius: 6px;
-    border-left: 3px solid #3b82f6;
-}
-
-.placeholder-name {
-    display: block;
-    font-weight: 600;
-    color: #1e40af;
-    margin-bottom: 0.25rem;
-}
-
-.placeholder-desc {
-    display: block;
-    font-size: 0.85rem;
-    color: #64748b;
-}
-
-.template-preview {
-    background: #f8fafc;
-    border: 1px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-    font-size: 0.9rem;
-    line-height: 1.8;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.template-preview h4 {
-    color: #1e293b;
-    margin-top: 1.5rem;
-    margin-bottom: 0.8rem;
-    font-size: 1.1rem;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 0.5rem;
-}
-
-.template-preview ul {
-    margin-bottom: 1.5rem;
-    padding-left: 1.5rem;
-}
-
-.template-preview li {
-    margin-bottom: 0.5rem;
-}
-
-.template-preview p {
-    margin-bottom: 1.2rem;
-}
-
-/* Signature Pad Styles */
-.signature-container {
-    margin: 1.5rem 0;
-}
-
-.signature-pad-wrapper {
-    position: relative;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: white;
-    margin-bottom: 1rem;
-}
-
-#signature-pad {
-    width: 100%;
-    height: 200px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
-    touch-action: none; /* Prevent scrolling while signing */
-    cursor: crosshair;
-}
-
-.signature-pad-wrapper {
-    position: relative;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: white;
-    margin-bottom: 1rem;
-    touch-action: none; /* Prevent scrolling */
-}
-
-.signature-guide {
-    position: absolute;
-    bottom: 30%;
-    width: 100%;
-    border-top: 1px dashed #ccc;
-    pointer-events: none;
-    color: #999;
-    text-align: center;
-    font-size: 12px;
-}
-
-.signature-actions {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.signature-preview {
-    padding: 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: #f8fafc;
-}
-
-.signature-preview img {
-    max-width: 200px;
-    border: 1px solid #e5e7eb;
-    border-radius: 4px;
-}
-
-.signature-instructions {
-    margin-bottom: 1rem;
-    padding: 1rem;
-    background: #f0f9ff;
-    border-left: 4px solid #3b82f6;
-    border-radius: 4px;
-}
-
-/* Summernote editor styling */
-.note-editor {
-    border-radius: 8px;
-    border: 1px solid #cbd5e1;
-    overflow: hidden;
-}
-
-.note-editor .note-toolbar {
-    background: #f1f5f9;
-    border-bottom: 1px solid #cbd5e1;
-}
-
-.note-editor .note-editable p {
-    margin-bottom: 1.2rem;
-    line-height: 1.8;
-}
-
-/* Alerts */
-.alert {
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.alert-success {
-    background: #dcfce7;
-    color: #166534;
-    border: 1px solid #bbf7d0;
-}
-
-.alert-error {
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
-}
-
-.alert i {
-    font-size: 1.25rem;
-}
-
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-}
-
-.empty-state i {
-    font-size: 3rem;
-    color: #cbd5e1;
-    margin-bottom: 1rem;
-}
-
-.empty-state h3 {
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
-    color: #1e293b;
-}
-
-.empty-state p {
-    color: #64748b;
-    margin-bottom: 1.5rem;
-}
-
-/* Badge styles */
-.badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    background: #3b82f6;
-    color: white;
-    font-size: 0.75rem;
-    border-radius: 12px;
-    font-weight: 500;
-    margin-top: 0.25rem;
-}
-
-/* View lease button */
-.view-lease-btn {
-    background-color: #4CAF50;
-    color: white;
-}
-
-.view-lease-btn:hover {
-    background-color: #45a049;
-}
-
-/* Termination modal styles */
-.termination-reason {
-    margin-top: 1rem;
-}
-
-.termination-reason textarea {
-    min-height: 100px;
-}
-
-/* Detail row spacing */
-.detail-row {
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.detail-label {
-    color: #64748b;
-    font-weight: 500;
-}
-
-.detail-value {
-    color: #1e293b;
-    font-weight: 500;
-    text-align: right;
-}
-
-/* Tenant property section */
-.tenant-property {
-    background: #f1f5f9;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.tenant-actions {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.signature-space {
-    height: 60px;
-    border-bottom: 1px solid #94a3b8;
-    margin-bottom: 0.5rem;
-}
-
-.signature-line {
-    margin-top: 3rem;
-    padding-top: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.signature-block {
-    margin-bottom: 1rem;
-}
-
-/* Responsive Design */
-@media (max-width: 1200px) {
-    .tenant-table th:nth-child(5),
-    .tenant-table td:nth-child(5),
-    .tenant-table th:nth-child(6),
-    .tenant-table td:nth-child(6) {
-        display: none;
-    }
-
-    .placeholder-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 992px) {
-    .tenant-table th:nth-child(4),
-    .tenant-table td:nth-child(4),
-    .tenant-table th:nth-child(7),
-    .tenant-table td:nth-child(7) {
-        display: none;
-    }
-}
-
-@media (max-width: 900px) {
-    .sidebar {
-        transform: translateX(-100%);
-        width: 280px;
-    }
-    
-    .sidebar.active {
-        transform: translateX(0);
-    }
-    
-    .main-content {
-        margin-left: 0;
-        width: 100%;
-    }
-    
-    .mobile-menu-btn {
-        display: block;
-    }
-
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-    }
-
-    .header-buttons {
-        width: 100%;
-        justify-content: flex-start;
-    }
-}
-
-@media (max-width: 768px) {
-    .main-content {
-        padding: 1rem;
-    }
-
-    .tenant-table th:nth-child(3),
-    .tenant-table td:nth-child(3) {
-        display: none;
-    }
-    
-    .tenant-info-cell {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    
-    .table-actions {
-        flex-direction: column;
-    }
-    
-    .table-actions .btn {
-        width: 100%;
-    }
-
-    .modal-body {
-        padding: 1.5rem;
-    }
-    
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-    
-    .tenant-property {
-        padding: 1.2rem;
-    }
-
-    .signature-line {
-        flex-direction: column;
-    }
-    
-    .signature-block {
-        width: 100%;
-        margin-bottom: 1.5rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .modal-body {
-        padding: 1rem;
-    }
-
-    .form-group {
-        margin-bottom: 1.2rem;
-    }
-
-    .template-preview {
-        padding: 1rem;
-    }
-
-    .page-title {
-        font-size: 1.5rem;
-    }
-
-    .header-buttons {
-        flex-direction: column;
-        width: 100%;
-    }
-
-    .tenant-actions {
-        flex-direction: column;
-    }
-
-    .signature-actions {
-        flex-direction: column;
-    }
-}
-
-/* ============================================
-   ENHANCED SUMMERNOTE FULLSCREEN MODE
-   ============================================ */
-
-/* White background for fullscreen body */
-body.note-fullscreen {
-    background: white !important;
-    overflow: hidden !important;
-}
-
-/* Fullscreen editor container */
-.note-editor.note-frame.fullscreen {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    background: white !important;
-    z-index: 99999 !important;
-    margin: 0 !important;
-    border: none !important;
-    border-radius: 0 !important;
-}
-
-/* Fullscreen toolbar styling */
-.note-editor.note-frame.fullscreen .note-toolbar {
-    background: #f8f9fa !important;
-    border-bottom: 2px solid #dee2e6 !important;
-    padding: 0.75rem 1rem !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-}
-
-/* Fullscreen editable area with white background */
-.note-editor.note-frame.fullscreen .note-editable {
-    background: white !important;
-    color: #1e293b !important;
-    padding: 2rem 3rem !important;
-    max-width: 1200px !important;
-    margin: 0 auto !important;
-    font-size: 1rem !important;
-    line-height: 1.8 !important;
-}
-
-/* Fullscreen statusbar */
-.note-editor.note-frame.fullscreen .note-statusbar {
-    background: #f8f9fa !important;
-    border-top: 1px solid #dee2e6 !important;
-}
-
-/* Hide other page elements in fullscreen mode */
-body.note-fullscreen .sidebar,
-body.note-fullscreen .top-bar,
-body.note-fullscreen .page-header,
-body.note-fullscreen .alert,
-body.note-fullscreen .empty-state {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-/* Ensure modal content stays white in fullscreen */
-body.note-fullscreen .modal-content {
-    background: white !important;
-}
-
-/* Modal backdrop should be white in fullscreen */
-body.note-fullscreen .modal {
-    background: white !important;
-}
-
-/* Additional styling for better readability in fullscreen */
-.note-editor.note-frame.fullscreen .note-editable h1,
-.note-editor.note-frame.fullscreen .note-editable h2,
-.note-editor.note-frame.fullscreen .note-editable h3,
-.note-editor.note-frame.fullscreen .note-editable h4,
-.note-editor.note-frame.fullscreen .note-editable h5,
-.note-editor.note-frame.fullscreen .note-editable h6 {
-    color: #1e293b !important;
-    margin-top: 1.5rem !important;
-    margin-bottom: 0.75rem !important;
-}
-
-.note-editor.note-frame.fullscreen .note-editable p {
-    margin-bottom: 1rem !important;
-    color: #1e293b !important;
-}
-
-.note-editor.note-frame.fullscreen .note-editable ul,
-.note-editor.note-frame.fullscreen .note-editable ol {
-    margin-bottom: 1rem !important;
-    padding-left: 2rem !important;
-}
-
-/* Ensure buttons and controls are visible in fullscreen */
-.note-editor.note-frame.fullscreen .note-toolbar .btn,
-.note-editor.note-frame.fullscreen .note-toolbar button {
-    background: white !important;
-    border: 1px solid #dee2e6 !important;
-    color: #495057 !important;
-}
-
-.note-editor.note-frame.fullscreen .note-toolbar .btn:hover,
-.note-editor.note-frame.fullscreen .note-toolbar button:hover {
-    background: #e9ecef !important;
-}
-
-.note-editor.note-frame.fullscreen .note-toolbar .btn.active,
-.note-editor.note-frame.fullscreen .note-toolbar button.active {
-    background: #007bff !important;
-    color: white !important;
-}
-
-/* Print-friendly styling for fullscreen mode */
-@media print {
-    body.note-fullscreen .note-editor.note-frame.fullscreen .note-toolbar,
-    body.note-fullscreen .note-editor.note-frame.fullscreen .note-statusbar {
-        display: none !important;
-    }
-    
-    body.note-fullscreen .note-editor.note-frame.fullscreen .note-editable {
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
-}
+        .sidebar .logo {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+        }
+
+        .sidebar .logo h2 {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .sidebar ul {
+            list-style: none;
+        }
+
+        .sidebar ul li {
+            margin: 5px 0;
+        }
+
+        .sidebar ul li a {
+            display: block;
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar ul li a:hover,
+        .sidebar ul li a.active {
+            background-color: rgba(255,255,255,0.1);
+            border-left-color: #fff;
+        }
+
+        .sidebar ul li a i {
+            margin-right: 10px;
+            width: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            margin-left: 250px;
+            max-width: calc(100% - 250px);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .landlord-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .landlord-info .avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        /* Page Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--accent-gradient);
+            border-radius: 20px;
+            padding: 1.75rem;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            border: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            transition: all 0.6s ease;
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            transition: all 0.6s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-10px) scale(1.03);
+            box-shadow: 0 20px 40px var(--shadow-color);
+        }
+
+        .stat-card:hover::before {
+            transform: scale(1.3) rotate(45deg);
+            top: -60%;
+            right: -30%;
+        }
+
+        .stat-card:hover::after {
+            transform: scale(1.4) rotate(-45deg);
+        }
+
+        .stat-card.total { 
+            --accent-gradient: linear-gradient(135deg, #8b7bce 0%, #6b5bb0 100%);
+            --shadow-color: rgba(139, 123, 206, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.pending { 
+            --accent-gradient: linear-gradient(135deg, #7ec8c3 0%, #5fb3ad 100%);
+            --shadow-color: rgba(126, 200, 195, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.active { 
+            --accent-gradient: linear-gradient(135deg, #6bcf9d 0%, #4fb883 100%);
+            --shadow-color: rgba(107, 207, 157, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card.approved { 
+            --accent-gradient: linear-gradient(135deg, #f4a79d 0%, #e8907f 100%);
+            --shadow-color: rgba(244, 167, 157, 0.4);
+            --icon-bg: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            min-width: 50px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: white;
+            background: var(--icon-bg);
+            backdrop-filter: blur(10px);
+            flex-shrink: 0;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover .stat-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 0.3rem;
+            line-height: 1.2;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.95);
+            font-weight: 600;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Filters */
+        .filters {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 2rem;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .filter-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .filter-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+        }
+
+        .btn-outline:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        /* Tenants List */
+        .tenants-list {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .tenant-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tenant-table thead {
+            background: #f8fafc;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .tenant-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tenant-table tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s ease;
+        }
+
+        .tenant-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .tenant-table td {
+            padding: 0.5rem;
+            vertical-align: top;
+            font-size: 0.8rem;
+        }
+
+        .tenant-info-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tenant-avatar-small {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .tenant-id {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+
+        .property-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .property-address {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .property-address i {
+            margin-right: 0.25rem;
+        }
+
+        .status-badge {
+            padding: 0.5rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            display: inline-block;
+        }
+
+        .status-draft { background: #fef3c7; color: #92400e; }
+        .status-pending { background: #dbeafe; color: #1e40af; }
+        .status-active { background: #dcfce7; color: #166534; }
+        .status-signed { background: #dcfce7; color: #166534; }
+
+        .table-actions {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dropdown-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 2px;
+        }
+
+        .dropdown-content.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 0.25rem 0.5rem;
+            text-decoration: none;
+            display: block;
+            color: #374151;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background-color 0.2s ease;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .dropdown-item.danger {
+            color: #dc2626;
+        }
+
+        .dropdown-item.danger:hover {
+            background-color: #fef2f2;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #cbd5e1;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #475569;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #3b82f6;
+            color: white;
+            font-size: 0.75rem;
+            border-radius: 12px;
+            font-weight: 500;
+            margin-left: 0.5rem;
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1001;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+            overflow: hidden;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .modal-header h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.75rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: opacity 0.2s ease;
+        }
+
+        .close-modal:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        textarea.form-control {
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        /* Signature Pad */
+        .signature-container {
+            margin: 1.5rem 0;
+        }
+
+        .signature-pad-wrapper {
+            position: relative;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: white;
+            margin-bottom: 1rem;
+            touch-action: none;
+        }
+
+        #signature-pad {
+            width: 100%;
+            height: 200px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+            touch-action: none;
+            cursor: crosshair;
+        }
+
+        .signature-guide {
+            position: absolute;
+            bottom: 30%;
+            width: 100%;
+            border-top: 1px dashed #ccc;
+            pointer-events: none;
+            color: #999;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .signature-actions {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .signature-preview {
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .signature-preview img {
+            max-width: 200px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }
+
+        .signature-instructions {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+        }
+
+        /* Summernote */
+        .note-editor {
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            overflow: hidden;
+        }
+
+        .note-editor .note-toolbar {
+            background: #f1f5f9;
+            border-bottom: 1px solid #cbd5e1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .tenant-table th:nth-child(4),
+            .tenant-table td:nth-child(4) {
+                display: none;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                max-width: 100%;
+            }
+            
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .header-buttons {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .tenant-table th:nth-child(6),
+            .tenant-table td:nth-child(6),
+            .tenant-table th:nth-child(7),
+            .tenant-table td:nth-child(7) {
+                display: none;
+            }
+
+            .filter-row {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .tenant-table th:nth-child(3),
+            .tenant-table td:nth-child(3) {
+                display: none;
+            }
+
+            .modal-body {
+                padding: 1rem;
+            }
+
+            .table-actions {
+                flex-direction: column;
+            }
+
+            .table-actions .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .stat-card {
+                padding: 1.25rem;
+            }
+            
+            .stat-value {
+                font-size: 1.5rem;
+            }
+            
+            .stat-label {
+                font-size: 0.75rem;
+            }
+            
+            .stat-icon {
+                width: 42px;
+                height: 42px;
+                font-size: 1.1rem;
+            }
+
+            .tenant-table {
+                font-size: 0.875rem;
+            }
+
+            .tenant-table th,
+            .tenant-table td {
+                padding: 0.75rem 0.5rem;
+            }
+
+            .filter-actions {
+                flex-direction: column;
+            }
+
+            .filter-actions .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-   <!-- Sidebar -->
-<div class="sidebar">
-    <div class="logo">
-        <h2>Easy Rent</h2>
-        <p>Landlord Portal</p>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <h2>Easy Rent</h2>
+            <p>Landlord Portal</p>
+        </div>
+        <ul>
+            <li><a href="../index.php" class="home-button"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="profile_landlord.php"><i class="fas fa-user"></i> Profile</a></li>
+            <li><a href="landlord_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="my_properties.php"><i class="fas fa-building"></i> My Properties</a></li>
+            <li><a href="applications.php"><i class="fas fa-file-alt"></i> Applications</a></li>
+            <li><a href="add_property.php"><i class="fas fa-plus-circle"></i> Add Property</a></li>
+            <li><a href="maintenance.php"><i class="fas fa-tools"></i> Maintenance</a></li>
+            <li><a href="tenants.php" class="active"><i class="fas fa-users"></i> Tenants</a></li>
+            <li><a href="reports.php"><i class="fas fa-chart-line"></i> Reports</a></li>
+            <li><a href="#" onclick="confirmLogout(event)"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        </ul>
     </div>
-    <ul>
-        <li><a href="../index.php" class="home-button"><i class="fas fa-home"></i> Home</a></li>
-        <li><a href="profile_landlord.php"><i class="fas fa-user"></i> Profile</a></li>
-        <li><a href="landlord_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-        <li><a href="my_properties.php"><i class="fas fa-building"></i> My Properties</a></li>
-        <li><a href="applications.php"><i class="fas fa-file-alt"></i> Applications</a></li>
-        <li><a href="add_property.php"><i class="fas fa-plus-circle"></i> Add Property</a></li>
-        <li><a href="maintenance.php"><i class="fas fa-tools"></i> Maintenance</a></li>
-        <li><a href="tenants.php" class="active"><i class="fas fa-users"></i> Tenants</a></li>
-        <li><a href="reports.php"><i class="fas fa-chart-line"></i> Reports</a></li>
-        <li><a href="#" onclick="confirmLogout(event)"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
-    </ul>
-</div>
 
     <!-- Main Content -->
     <div class="main-content">
-    <!-- Top Bar -->
-    <div class="top-bar">
-        <h1 class="page-title">
-            <i class="fas fa-users"></i>
-            Tenants & Approved Applications
-        </h1>
-        <div class="landlord-info">
-            <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></span>
-            <div class="avatar"><?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?></div>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <h1 class="page-title">
+                <i class="fas fa-users"></i>
+                Tenants & Leases
+            </h1>
+            <div class="landlord-info">
+                <span>Hello, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Landlord'); ?></span>
+                <div class="avatar"><?php echo strtoupper(substr($_SESSION['user_name'] ?? 'L', 0, 1)); ?></div>
+            </div>
         </div>
-    </div>
-        <!-- Page Header -->
-        <div class="page-header">
-    <h1 class="page-title">
-        <i class="fas fa-users"></i>
-        Tenants & Approved Applications
-    </h1>
-    <div class="header-buttons">
-        <a href="terminated_leases.php" class="btn btn-secondary">
-            <i class="fas fa-file-contract"></i>
-            View Terminated Leases
-        </a>
-        <button class="btn btn-primary" id="createTemplateBtn">
-            <i class="fas fa-file-contract"></i>
-            Create Lease Template
-        </button>
-    </div>
-</div>
 
         <?php if (isset($success_message)): ?>
             <div class="alert alert-success">
@@ -1390,161 +1370,309 @@ body.note-fullscreen .modal {
             </div>
         <?php endif; ?>
 
-<!-- Replace the entire tenant-cards div with this table -->
-<div class="tenant-table-container">
-    <table class="tenant-table">
-        <thead>
-            <tr>
-                <th>Tenant</th>
-                <th>Contact</th>
-                <th>Property</th>
-                <th>Application Date</th>
-                <th>Lease Status</th>
-                <th>Lease Period</th>
-                <th>Rent Amount</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
+        <!-- Page Header -->
+        <div class="page-header">
+            <div></div>
+            <div class="header-buttons">
+                <a href="terminated_leases.php" class="btn btn-secondary">
+                    <i class="fas fa-file-contract"></i>
+                    Terminated Leases
+                </a>
+                <button class="btn btn-primary" id="createTemplateBtn">
+                    <i class="fas fa-file-contract"></i>
+                    Create Template
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card total">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['total_tenants'] ?? 0; ?></div>
+                        <div class="stat-label">Total Tenants</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card pending">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['pending_leases'] ?? 0; ?></div>
+                        <div class="stat-label">Pending Leases</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card active">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['active_leases'] ?? 0; ?></div>
+                        <div class="stat-label">Active Leases</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card approved">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value"><?php echo $stats['approved_no_lease'] ?? 0; ?></div>
+                        <div class="stat-label">Awaiting Lease</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <form method="GET" class="filters" id="filterForm">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="property_filter">Property</label>
+                    <select id="property_filter" name="property_filter" class="filter-control">
+                        <option value="">All Properties</option>
+                        <?php
+                        // Get unique properties from approved tenants
+                        $properties_seen = [];
+                        foreach ($approved_tenants as $tenant) {
+                            if (!in_array($tenant['property_id'], $properties_seen)) {
+                                $properties_seen[] = $tenant['property_id'];
+                                $selected = (isset($_GET['property_filter']) && $_GET['property_filter'] == $tenant['property_id']) ? 'selected' : '';
+                                echo '<option value="' . $tenant['property_id'] . '" ' . $selected . '>' . htmlspecialchars($tenant['property_title']) . '</option>';
+                            }
+                        }
+                        ?>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="lease_status_filter">Lease Status</label>
+                    <select id="lease_status_filter" name="lease_status_filter" class="filter-control">
+                        <option value="">All Statuses</option>
+                        <option value="no_lease" <?php echo (isset($_GET['lease_status_filter']) && $_GET['lease_status_filter'] === 'no_lease') ? 'selected' : ''; ?>>No Lease</option>
+                        <option value="draft" <?php echo (isset($_GET['lease_status_filter']) && $_GET['lease_status_filter'] === 'draft') ? 'selected' : ''; ?>>Draft</option>
+                        <option value="pending" <?php echo (isset($_GET['lease_status_filter']) && $_GET['lease_status_filter'] === 'pending') ? 'selected' : ''; ?>>Pending</option>
+                        <option value="active" <?php echo (isset($_GET['lease_status_filter']) && $_GET['lease_status_filter'] === 'active') ? 'selected' : ''; ?>>Active</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="search">Search Tenant</label>
+                    <input type="text" id="search" name="search" class="filter-control" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button type="button" class="btn btn-outline" onclick="resetFilters()">
+                    <i class="fas fa-sync"></i>
+                    Reset Filters
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter"></i>
+                    Apply Filters
+                </button>
+            </div>
+        </form>
+
+        <!-- Tenants Table -->
+        <div class="tenants-list">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-users"></i>
+                    Tenant Management
+                </h2>
+            </div>
+
             <?php if (!empty($grouped_tenants)): ?>
-                <?php foreach ($grouped_tenants as $tenant_id => $tenant_data): ?>
-                    <?php 
-                    $tenant_info = $tenant_data['tenant_info'];
-                    $applications = $tenant_data['applications'];
-                    ?>
-                    
-                    <?php foreach ($applications as $application): ?>
-                        <tr>
-                            <!-- Tenant Column -->
-                            <td>
-                                <div class="tenant-info-cell">
-                                    <div class="tenant-avatar-small">
-                                        <?php echo strtoupper(substr($tenant_info['name'], 0, 1)); ?>
-                                    </div>
-                                    <div>
-                                        <strong><?php echo htmlspecialchars($tenant_info['name']); ?></strong>
-                                        <div class="tenant-id">ID: #<?php echo htmlspecialchars($tenant_info['id']); ?></div>
-                                        <?php if ($tenant_info['approved_app_count'] > 1): ?>
-                                            <span class="badge"><?php echo $tenant_info['approved_app_count']; ?> approved</span>
+                <div class="table-container">
+                    <table class="tenant-table">
+                        <thead>
+                            <tr>
+                                <th>Tenant</th>
+                                <th>Contact</th>
+                                <th>Property</th>
+                                <th>Application Date</th>
+                                <th>Lease Status</th>
+                                <th>Lease Period</th>
+                                <th>Rent Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $displayCount = 0;
+                            foreach ($grouped_tenants as $tenant_id => $tenant_data): 
+                                $tenant_info = $tenant_data['tenant_info'];
+                                $applications = $tenant_data['applications'];
+                                
+                                foreach ($applications as $application): 
+                                    // Apply filters
+                                    $shouldDisplay = true;
+                                    
+                                    // Property filter
+                                    if (isset($_GET['property_filter']) && !empty($_GET['property_filter'])) {
+                                        if ($application['property_id'] != $_GET['property_filter']) {
+                                            $shouldDisplay = false;
+                                        }
+                                    }
+                                    
+                                    // Lease status filter
+                                    if (isset($_GET['lease_status_filter']) && !empty($_GET['lease_status_filter'])) {
+                                        if ($_GET['lease_status_filter'] === 'no_lease') {
+                                            if ($application['lease_id'] && !empty($application['lease_id'])) {
+                                                $shouldDisplay = false;
+                                            }
+                                        } else {
+                                            if ($application['lease_status'] != $_GET['lease_status_filter']) {
+                                                $shouldDisplay = false;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Search filter
+                                    if (isset($_GET['search']) && !empty($_GET['search'])) {
+                                        $search = strtolower($_GET['search']);
+                                        $name = strtolower($tenant_info['name']);
+                                        $email = strtolower($tenant_info['email']);
+                                        if (strpos($name, $search) === false && strpos($email, $search) === false) {
+                                            $shouldDisplay = false;
+                                        }
+                                    }
+                                    
+                                    if (!$shouldDisplay) continue;
+                                    $displayCount++;
+                            ?>
+                                <tr class="tenant-row">
+                                    <td>
+                                        <div class="tenant-info-cell">
+                                            <div>
+                                                <strong><?php echo htmlspecialchars($tenant_info['name']); ?></strong>
+                                                <div class="tenant-id" style="display: none;">ID: #<?php echo htmlspecialchars($tenant_info['id']); ?></div>
+                                                <?php if ($tenant_info['approved_app_count'] > 1): ?>
+                                                    <span class="badge"><?php echo $tenant_info['approved_app_count']; ?> properties</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div><?php echo htmlspecialchars($tenant_info['email']); ?></div>
+                                        <div style="color: #64748b; font-size: 0.875rem;"><?php echo htmlspecialchars($tenant_info['phone']); ?></div>
+                                    </td>
+                                    <td>
+                                        <div class="property-title"><?php echo htmlspecialchars($application['property_title']); ?></div>
+                                        <div class="property-address">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <?php echo htmlspecialchars($application['property_address']); ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <?php echo $application['application_date'] ? date('M j, Y', strtotime($application['application_date'])) : 'N/A'; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
+                                            <span class="status-badge status-<?php echo $application['lease_status']; ?>">
+                                                <?php echo ucfirst($application['lease_status']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="status-badge" style="background: #fef3c7; color: #92400e;">
+                                                No Lease
+                                            </span>
                                         <?php endif; ?>
-                                    </div>
-                                </div>
-                            </td>
-                            
-                            <!-- Contact Column -->
-                            <td>
-                                <div><?php echo htmlspecialchars($tenant_info['email']); ?></div>
-                                <div><?php echo htmlspecialchars($tenant_info['phone']); ?></div>
-                            </td>
-                            
-                            <!-- Property Column -->
-                            <td>
-                                <div class="property-title"><?php echo htmlspecialchars($application['property_title']); ?></div>
-                                <div class="property-address">
-                                    <i class="fas fa-map-marker-alt"></i>
-                                    <?php echo htmlspecialchars($application['property_address']); ?>
-                                </div>
-                            </td>
-                            
-                            <!-- Application Date Column -->
-                            <td>
-                                <?php echo date('M j, Y', strtotime($application['application_date'])); ?>
-                            </td>
-                            
-                            <!-- Lease Status Column -->
-                            <td>
-                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
-                                    <span class="lease-status status-<?php echo $application['lease_status']; ?>">
-                                        <?php echo ucfirst($application['lease_status']); ?>
-                                    </span>
-                                <?php else: ?>
-                                    No lease created
-                                <?php endif; ?>
-                            </td>
-                            
-                            <!-- Lease Period Column -->
-                            <td>
-                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
-                                    <?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?> - 
-                                    <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-                            
-                            <!-- Rent Amount Column -->
-                            <td>
-                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
-                                    R<?php echo number_format($application['monthly_rent']); ?>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-                            
-                            <!-- Actions Column - UPDATED VERSION -->
-                            <td>
-                                <div class="table-actions">
-                                    <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
-                                        <?php if ($application['lease_status'] == 'draft' || $application['lease_status'] == 'pending'): ?>
-                                            <button class="btn btn-sm btn-secondary view-lease-btn" 
-                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
-                                                    onclick="window.open('view_lease.php?id=<?php echo $application['lease_id']; ?>', '_blank')">
-                                                <i class="fas fa-eye"></i> Preview
-                                            </button>
-                                            <button class="btn btn-sm btn-success sign-lease-btn" 
-                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
-                                                    data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
-                                                    data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
-                                                <i class="fas fa-signature"></i> Sign Lease
-                                            </button>
-                                        <?php elseif ($application['lease_status'] == 'active'): ?>
-                                            <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary" target="_blank">
-                                                <i class="fas fa-file-alt"></i> View
-                                            </a>
-                                            <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="btn btn-sm btn-secondary">
-                                                <i class="fas fa-download"></i> Download
-                                            </a>
-                                            <button class="btn btn-sm btn-danger terminate-lease-btn" 
-                                                    data-lease-id="<?php echo $application['lease_id']; ?>"
-                                                    data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
-                                                    data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
-                                                <i class="fas fa-times-circle"></i> Terminate
-                                            </button>
+                                    </td>
+                                    <td>
+                                        <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
+                                            <div><?php echo date('M j, Y', strtotime($application['lease_start_date'])); ?></div>
+                                            <div style="color: #64748b; font-size: 0.875rem;">to <?php echo date('M j, Y', strtotime($application['lease_end_date'])); ?></div>
+                                        <?php else: ?>
+                                            -
                                         <?php endif; ?>
-                                    <?php else: ?>
-                                        <button class="btn btn-sm btn-primary create-lease-btn" 
-                                                data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>" 
-                                                data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
-                                                data-application-id="<?php echo $application['application_id']; ?>"
-                                                data-tenant-id="<?php echo $tenant_info['id']; ?>">
-                                            <i class="fas fa-file-contract"></i> Create Lease
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endforeach; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
+                                            <strong>R<?php echo number_format($application['monthly_rent']); ?></strong>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="dropdown-btn" onclick="toggleDropdown(this)">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                                Actions
+                                            </button>
+                                            <div class="dropdown-content">
+                                                <?php if ($application['lease_id'] && !empty($application['lease_id'])): ?>
+                                                    <?php if ($application['lease_status'] == 'draft' || $application['lease_status'] == 'pending'): ?>
+                                                        <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="dropdown-item" target="_blank">
+                                                            <i class="fas fa-eye"></i> Preview
+                                                        </a>
+                                                        <button class="dropdown-item sign-lease-btn"
+                                                                data-lease-id="<?php echo $application['lease_id']; ?>"
+                                                                data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
+                                                                data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
+                                                            <i class="fas fa-signature"></i> Sign
+                                                        </button>
+                                                    <?php elseif ($application['lease_status'] == 'active'): ?>
+                                                        <a href="view_lease.php?id=<?php echo $application['lease_id']; ?>" class="dropdown-item" target="_blank">
+                                                            <i class="fas fa-file-alt"></i> View
+                                                        </a>
+                                                        <a href="download_lease.php?id=<?php echo $application['lease_id']; ?>" class="dropdown-item">
+                                                            <i class="fas fa-download"></i> Download
+                                                        </a>
+                                                        <button class="dropdown-item danger terminate-lease-btn"
+                                                                data-lease-id="<?php echo $application['lease_id']; ?>"
+                                                                data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
+                                                                data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>">
+                                                            <i class="fas fa-times-circle"></i> Terminate
+                                                        </button>
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <button class="dropdown-item create-lease-btn"
+                                                            data-tenant-name="<?php echo htmlspecialchars($tenant_info['name']); ?>"
+                                                            data-property-name="<?php echo htmlspecialchars($application['property_title']); ?>"
+                                                            data-application-id="<?php echo $application['application_id']; ?>"
+                                                            data-tenant-id="<?php echo $tenant_info['id']; ?>">
+                                                        <i class="fas fa-file-contract"></i> Create Lease
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php 
+                                endforeach;
+                            endforeach; 
+                            ?>
+                            <?php if ($displayCount === 0): ?>
+                                <tr>
+                                    <td colspan="8" class="empty-state">
+                                        <i class="fas fa-filter"></i>
+                                        <h3>No Results Found</h3>
+                                        <p>No tenants match your current filters. Try adjusting your search criteria.</p>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             <?php else: ?>
-                <tr>
-                    <td colspan="8" class="empty-state">
-                        <i class="fas fa-user-friends"></i>
-                        <h3>No Approved Tenants</h3>
-                        <?php if (isset($error_message)): ?>
-                            <p style="color: red;">Database error occurred. Please check your database connection and table structure.</p>
-                        <?php else: ?>
-                            <p>You don't have any approved tenants yet. Once tenants apply and get approved, they'll appear here.</p>
-                        <?php endif; ?>
-                        <a href="applications.php" class="btn btn-primary">
-                            <i class="fas fa-list"></i>
-                            View Applications
-                        </a>
-                    </td>
-                </tr>
+                <div class="empty-state">
+                    <i class="fas fa-user-friends"></i>
+                    <h3>No Approved Tenants</h3>
+                    <p>You don't have any approved tenants yet. Once tenants apply and get approved, they'll appear here.</p>
+                    <a href="applications.php" class="btn btn-primary" style="margin-top: 1rem;">
+                        <i class="fas fa-list"></i>
+                        View Applications
+                    </a>
+                </div>
             <?php endif; ?>
-        </tbody>
-    </table>
-</div>
+        </div>
     </div>
 
     <!-- Create Lease Modal -->
@@ -1566,19 +1694,19 @@ body.note-fullscreen .modal {
                     
                     <div class="form-group">
                         <label class="form-label">Lease Template</label>
-<select name="template_id" class="form-control" <?php echo !empty($templates) ? 'required' : 'disabled'; ?> id="templateSelect">
-    <option value="">Select a template</option>
-    <?php if (!empty($templates)): ?>
-        <?php foreach ($templates as $template): ?>
-            <option value="<?php echo $template['id']; ?>">
-                <?php echo htmlspecialchars($template['template_name']); ?>
-                (<?php echo date('M j, Y', strtotime($template['created_at'])); ?>)
-            </option>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <option value="" disabled>No templates available - Create one first</option>
-    <?php endif; ?>
-</select>
+                        <select name="template_id" class="form-control" <?php echo !empty($templates) ? 'required' : 'disabled'; ?> id="templateSelect">
+                            <option value="">Select a template</option>
+                            <?php if (!empty($templates)): ?>
+                                <?php foreach ($templates as $template): ?>
+                                    <option value="<?php echo $template['id']; ?>">
+                                        <?php echo htmlspecialchars($template['template_name']); ?>
+                                        (<?php echo date('M j, Y', strtotime($template['created_at'])); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="" disabled>No templates available - Create one first</option>
+                            <?php endif; ?>
+                        </select>
                     </div>
                     
                     <div class="form-group">
@@ -1692,7 +1820,7 @@ body.note-fullscreen .modal {
                         <input type="text" name="termination_date" class="form-control datepicker" required>
                     </div>
                     
-                    <div class="form-group termination-reason">
+                    <div class="form-group">
                         <label class="form-label">Termination Reason</label>
                         <textarea name="termination_reason" class="form-control" rows="4" required placeholder="Enter the reason for terminating this lease..."></textarea>
                     </div>
@@ -1709,25 +1837,24 @@ body.note-fullscreen .modal {
     </div>
 
     <!-- Create Template Modal -->
-    <!-- Update the template content in the createTemplateModal -->
-<div class="modal" id="createTemplateModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 class="modal-title">Create Lease Template</h3>
-            <button class="close-modal">&times;</button>
-        </div>
-        <div class="modal-body">
-            <form id="templateForm" method="POST">
-                <input type="hidden" name="create_template" value="1">
-                
-                <div class="form-group">
-                    <label class="form-label">Template Name</label>
-                    <input type="text" name="template_name" class="form-control" required placeholder="e.g., Standard 12-Month Lease">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Template Content</label>
-                    <textarea id="template-content" name="content" class="form-control" rows="10" required>
+    <div class="modal" id="createTemplateModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Lease Template</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm" method="POST">
+                    <input type="hidden" name="create_template" value="1">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Template Name</label>
+                        <input type="text" name="template_name" class="form-control" required placeholder="e.g., Standard 12-Month Lease">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Template Content</label>
+                        <textarea id="template-content" name="content" class="form-control" rows="10" required>
 <h4 style="text-align: center; margin-bottom: 1.5rem;">RESIDENTIAL LEASE AGREEMENT</h4>
 
 <div class="template-section">
@@ -1782,78 +1909,74 @@ body.note-fullscreen .modal {
     <h5 style="margin: 1rem 0 0.5rem;">10. GOVERNING LAW</h5>
     <p>This Agreement shall be governed by the laws of the Republic of South Africa.</p>
 </div>
-                    </textarea>
-                </div>
-                
-                <div class="form-group" style="margin-top: 1.5rem;">
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
-                        <i class="fas fa-save"></i>
-                        Save Lease Template
-                    </button>
-                </div>
-            </form>
+                        </textarea>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 1.5rem;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+                            <i class="fas fa-save"></i>
+                            Save Lease Template
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-   <script>
+    <script>
         // Initialize date pickers
         flatpickr('.datepicker', {
             dateFormat: "Y-m-d",
             minDate: "today"
         });
 
-        // Initialize signature pad with smooth settings
-const canvas = document.getElementById('signature-pad');
+        // Initialize signature pad
+        const canvas = document.getElementById('signature-pad');
 
-// Function to resize canvas for proper signature pad functionality
-function resizeCanvas() {
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
-    canvas.getContext("2d").scale(ratio, ratio);
-    signaturePad.clear(); // Clear on resize to avoid artifacts
-}
+        function resizeCanvas() {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear();
+        }
 
-const signaturePad = new SignaturePad(canvas, {
-    backgroundColor: 'rgba(255, 255, 255, 0)',
-    penColor: 'rgb(0, 0, 0)',
-    minWidth: 1,
-    maxWidth: 3,
-    throttle: 16, // Smooth drawing
-    minDistance: 1,
-    velocityFilterWeight: 0.7,
-    dotSize: function () {
-        return (this.minWidth + this.maxWidth) / 2;
-    }
-});
+        const signaturePad = new SignaturePad(canvas, {
+            backgroundColor: 'rgba(255, 255, 255, 0)',
+            penColor: 'rgb(0, 0, 0)',
+            minWidth: 1,
+            maxWidth: 3,
+            throttle: 16,
+            minDistance: 1,
+            velocityFilterWeight: 0.7,
+            dotSize: function () {
+                return (this.minWidth + this.maxWidth) / 2;
+            }
+        });
 
-// Resize canvas when modal opens
-document.querySelectorAll('.sign-lease-btn').forEach(button => {
-    button.addEventListener('click', function() {
-        const leaseId = this.getAttribute('data-lease-id');
-        const tenantName = this.getAttribute('data-tenant-name');
-        const propertyName = this.getAttribute('data-property-name');
-        
-        document.getElementById('lease_id').value = leaseId;
-        document.getElementById('signatureLeaseInfo').innerHTML = `
-            <strong>Tenant:</strong> ${tenantName}<br>
-            <strong>Property:</strong> ${propertyName}
-        `;
-        
-        openModal('signLeaseModal');
-        
-        // Resize canvas after modal is opened
-        setTimeout(() => {
-            resizeCanvas();
-        }, 100);
-    });
-});
+        document.querySelectorAll('.sign-lease-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const leaseId = this.getAttribute('data-lease-id');
+                const tenantName = this.getAttribute('data-tenant-name');
+                const propertyName = this.getAttribute('data-property-name');
+                
+                document.getElementById('lease_id').value = leaseId;
+                document.getElementById('signatureLeaseInfo').innerHTML = `
+                    <strong>Tenant:</strong> ${tenantName}<br>
+                    <strong>Property:</strong> ${propertyName}
+                `;
+                
+                openModal('signLeaseModal');
+                
+                setTimeout(() => {
+                    resizeCanvas();
+                }, 100);
+            });
+        });
 
-// Handle window resize
-window.addEventListener("resize", resizeCanvas);
+        window.addEventListener("resize", resizeCanvas);
 
-        // Handle modal functionality
+        // Modal functionality
         const modals = document.querySelectorAll('.modal');
         const closeButtons = document.querySelectorAll('.close-modal');
         
@@ -1866,59 +1989,53 @@ window.addEventListener("resize", resizeCanvas);
         }
         
         // Create lease buttons
-// Create lease buttons
-document.querySelectorAll('.create-lease-btn').forEach(button => {
-    button.addEventListener('click', function() {
-        const tenantName = this.getAttribute('data-tenant-name');
-        const propertyName = this.getAttribute('data-property-name');
-        const applicationId = this.getAttribute('data-application-id');
-        const tenantId = this.getAttribute('data-tenant-id');
-        
-        // First check if there are any lease templates available
-        <?php if (empty($templates)): ?>
-            Swal.fire({
-                title: 'No Lease Templates Available',
-                text: 'You have no available leases. Please create a lease template first.',
-                icon: 'warning',
-                confirmButtonText: 'Create Template',
-                showCancelButton: true,
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    openModal('createTemplateModal');
-                }
-            });
-            return;
-        <?php endif; ?>
-        
-        // Check if tenant already has a draft lease via AJAX
-        fetch('check_draft_lease.php?tenant_id=' + tenantId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.has_draft) {
+        document.querySelectorAll('.create-lease-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const tenantName = this.getAttribute('data-tenant-name');
+                const propertyName = this.getAttribute('data-property-name');
+                const applicationId = this.getAttribute('data-application-id');
+                const tenantId = this.getAttribute('data-tenant-id');
+                
+                <?php if (empty($templates)): ?>
                     Swal.fire({
-                        title: 'Draft Exists',
-                        text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
+                        title: 'No Lease Templates Available',
+                        text: 'You have no available leases. Please create a lease template first.',
                         icon: 'warning',
-                        confirmButtonText: 'OK'
+                        confirmButtonText: 'Create Template',
+                        showCancelButton: true,
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            openModal('createTemplateModal');
+                        }
                     });
-                } else {
-                    document.getElementById('propertyName').value = propertyName;
-                    document.getElementById('application_id').value = applicationId;
-
-                    openModal('createLeaseModal');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                // If there's an error with the check, still allow opening the modal
-                document.getElementById('propertyName').value = propertyName;
-                document.getElementById('application_id').value = applicationId;
-
-                openModal('createLeaseModal');
+                    return;
+                <?php endif; ?>
+                
+                fetch('check_draft_lease.php?tenant_id=' + tenantId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.has_draft) {
+                            Swal.fire({
+                                title: 'Draft Exists',
+                                text: 'This tenant already has a draft lease. Please sign or cancel the existing lease before creating a new one.',
+                                icon: 'warning',
+                                confirmButtonText: 'OK'
+                            });
+                        } else {
+                            document.getElementById('propertyName').value = propertyName;
+                            document.getElementById('application_id').value = applicationId;
+                            openModal('createLeaseModal');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        document.getElementById('propertyName').value = propertyName;
+                        document.getElementById('application_id').value = applicationId;
+                        openModal('createLeaseModal');
+                    });
             });
-    });
-});
+        });
 
         // Terminate lease buttons
         document.querySelectorAll('.terminate-lease-btn').forEach(button => {
@@ -1935,7 +2052,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             });
         });
         
-        // Close modals when clicking close button or outside modal
         closeButtons.forEach(button => {
             button.addEventListener('click', function() {
                 const modal = this.closest('.modal');
@@ -1951,7 +2067,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             });
         });
         
-        // Create template button
         document.getElementById('createTemplateBtn').addEventListener('click', function() {
             openModal('createTemplateModal');
         });
@@ -1978,7 +2093,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             document.getElementById('signature').value = signatureData;
             document.getElementById('signLeaseBtn').disabled = false;
             
-            // Show preview
             document.getElementById('previewImage').src = signatureData;
             document.getElementById('signaturePreview').style.display = 'block';
             
@@ -1990,7 +2104,7 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             });
         });
         
-        // Initialize Summernote editor for template content
+        // Initialize Summernote
         $(document).ready(function() {
             $('#template-content').summernote({
                 height: 300,
@@ -2008,37 +2122,23 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
             });
         });
 
-        // ENHANCED FORM SUBMISSION HANDLERS WITH CONFIRMATIONS
-
-        // Handle lease template creation with confirmation
+        // Form submissions with confirmations
         document.getElementById('templateForm').addEventListener('submit', function(e) {
-            e.preventDefault(); // Always prevent default first
+            e.preventDefault();
             
             const templateName = this.elements['template_name'].value.trim();
             const content = this.elements['content'].value.trim();
             
-            // Validation
-            if (!templateName) {
+            if (!templateName || !content) {
                 Swal.fire({
                     title: 'Error',
-                    text: 'Please enter a template name',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-            
-            if (!content) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Please enter template content',
+                    text: 'Please fill in all required fields',
                     icon: 'error',
                     confirmButtonText: 'OK'
                 });
                 return;
             }
 
-            // Confirmation dialog
             Swal.fire({
                 title: 'Create Lease Template?',
                 text: `Are you sure you want to create the template "${templateName}"?`,
@@ -2050,7 +2150,6 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                 cancelButtonText: 'Cancel'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Show loading
                     Swal.fire({
                         title: 'Creating Template',
                         text: 'Please wait...',
@@ -2059,76 +2158,66 @@ document.querySelectorAll('.create-lease-btn').forEach(button => {
                             Swal.showLoading();
                         }
                     });
-                    
-                    // Submit the form
                     this.submit();
                 }
             });
         });
 
-        // Handle lease agreement creation with confirmation
-// Handle lease agreement creation with confirmation
-document.getElementById('leaseForm').addEventListener('submit', function(e) {
-    e.preventDefault(); // Always prevent default first
-    
-    const templateId = this.elements['template_id'].value;
-    const propertyName = document.getElementById('propertyName').value;
-    const startDate = this.elements['start_date'].value;
-    const endDate = this.elements['end_date'].value;
-    const rentAmount = this.elements['rent_amount'].value;
+        document.getElementById('leaseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const templateId = this.elements['template_id'].value;
+            const propertyName = document.getElementById('propertyName').value;
+            const startDate = this.elements['start_date'].value;
+            const endDate = this.elements['end_date'].value;
+            const rentAmount = this.elements['rent_amount'].value;
 
-    // Validation
-    if (!templateId) {
-        Swal.fire({
-            title: 'Error',
-            text: 'Please select a lease template',
-            icon: 'error',
-            confirmButtonText: 'OK'
-        });
-        return;
-    }
+            if (!templateId) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Please select a lease template',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
 
-    // Confirmation dialog
-    Swal.fire({
-        title: 'Create Lease Agreement?',
-        html: `
-            <div style="text-align: left; margin: 1rem 0;">
-                <p><strong>Property:</strong> ${propertyName}</p>
-                <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
-                <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
-            </div>
-            <p style="margin-top: 1rem;">Are you sure you want to create this lease agreement?</p>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#3b82f6',
-        cancelButtonColor: '#6b7280',
-        confirmButtonText: 'Yes, create lease',
-        cancelButtonText: 'Cancel',
-        customClass: {
-            htmlContainer: 'text-left'
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Show loading
             Swal.fire({
-                title: 'Creating Lease Agreement',
-                text: 'Please wait...',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
+                title: 'Create Lease Agreement?',
+                html: `
+                    <div style="text-align: left; margin: 1rem 0;">
+                        <p><strong>Property:</strong> ${propertyName}</p>
+                        <p><strong>Lease Period:</strong> ${startDate} to ${endDate}</p>
+                        <p><strong>Monthly Rent:</strong> R${parseFloat(rentAmount).toLocaleString()}</p>
+                    </div>
+                    <p style="margin-top: 1rem;">Are you sure you want to create this lease agreement?</p>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, create lease',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    htmlContainer: 'text-left'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Creating Lease Agreement',
+                        text: 'Please wait...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    this.submit();
                 }
             });
+        });
 
-            // Submit the form normally - the redirect will handle the rest
-            this.submit();
-        }
-    });
-});
-
-        // Handle terminate lease form submission
         document.getElementById('terminateLeaseForm').addEventListener('submit', function(e) {
-            e.preventDefault(); // Always prevent default first
+            e.preventDefault();
             
             const tenantName = document.getElementById('terminate_tenant_name').value;
             const propertyName = document.getElementById('terminate_property_name').value;
@@ -2170,7 +2259,6 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Show loading
                     Swal.fire({
                         title: 'Terminating Lease',
                         text: 'Please wait...',
@@ -2179,14 +2267,78 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
                             Swal.showLoading();
                         }
                     });
-                    
-                    // Submit the form
                     this.submit();
                 }
             });
         });
 
-        // Show success/error messages
+        // Mobile menu toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+            });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth < 900 && 
+                sidebar.classList.contains('active') && 
+                !sidebar.contains(e.target) && 
+                !mobileMenuBtn.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        function resetFilters() {
+            document.getElementById('property_filter').value = '';
+            document.getElementById('lease_status_filter').value = '';
+            document.getElementById('search').value = '';
+            document.getElementById('filterForm').submit();
+        }
+
+        function toggleDropdown(button) {
+            // Close all other dropdowns
+            document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+                if (dropdown !== button.nextElementSibling) {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            // Toggle the clicked dropdown
+            const dropdown = button.nextElementSibling;
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.matches('.dropdown-btn') && !event.target.closest('.dropdown-btn')) {
+                document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+                    dropdown.classList.remove('show');
+                });
+            }
+        });
+
+        function confirmLogout(event) {
+            event.preventDefault();
+
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You will be logged out of your account",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, logout!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../auth/logout.php';
+                }
+            });
+        }
+
         <?php if (isset($success_message)): ?>
             Swal.fire({
                 icon: 'success',
@@ -2205,48 +2357,5 @@ document.getElementById('leaseForm').addEventListener('submit', function(e) {
             });
         <?php endif; ?>
     </script>
-    
-    <script>
-        // Mobile menu toggle
-        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
-        const sidebar = document.querySelector('.sidebar');
-
-        if (mobileMenuBtn) {
-            mobileMenuBtn.addEventListener('click', () => {
-                sidebar.classList.toggle('active');
-            });
-        }
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', (e) => {
-            if (window.innerWidth < 900 && 
-                sidebar.classList.contains('active') && 
-                !sidebar.contains(e.target) && 
-                !mobileMenuBtn.contains(e.target)) {
-                sidebar.classList.remove('active');
-            }
-        });
-
-        // Logout confirmation function
-        function confirmLogout(event) {
-            event.preventDefault();
-            
-            Swal.fire({
-                title: 'Are you sure?',
-                text: "You will be logged out of your account",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, logout!',
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = '../auth/logout.php';
-                }
-            });
-        }
-    </script>
-
 </body>
 </html>
