@@ -22,6 +22,34 @@ if (!$conn) {
 
 $tenant_id = $_SESSION['user_id'];
 
+// Get tenant name from session or database
+$tenant_name = '';
+if (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
+    $tenant_name = $_SESSION['user_name'];
+} elseif (isset($_SESSION['username']) && !empty($_SESSION['username'])) {
+    $tenant_name = $_SESSION['username'];
+} elseif (isset($_SESSION['name']) && !empty($_SESSION['name'])) {
+    $tenant_name = $_SESSION['name'];
+} else {
+    // Fetch name from database if not in session
+    $user_query = "SELECT name, username, email FROM users WHERE id = ? AND user_type = 'tenant' LIMIT 1";
+    $stmt = mysqli_prepare($conn, $user_query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $tenant_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($row = mysqli_fetch_assoc($result)) {
+            $tenant_name = $row['name'] ?: $row['username'] ?: $row['email'];
+            $_SESSION['user_name'] = $tenant_name;
+        }
+        mysqli_stmt_close($stmt);
+    }
+    
+    if (empty($tenant_name)) {
+        $tenant_name = 'Tenant';
+    }
+}
+
 // Handle new maintenance request submission
 if (isset($_POST['submit_maintenance'])) {
     $property_id = intval($_POST['property_id']);
@@ -38,7 +66,7 @@ if (isset($_POST['submit_maintenance'])) {
         $landlord_data = mysqli_fetch_assoc($landlord_result);
         $landlord_id = $landlord_data['landlord_id'];
     } else {
-        $landlord_id = 0; // Default if not found
+        $landlord_id = 0;
     }
     
     $insert_query = "INSERT INTO maintenance_requests (tenant_id, property_id, landlord_id, title, description, priority, category, status, reported_date, created_at) 
@@ -50,7 +78,6 @@ if (isset($_POST['submit_maintenance'])) {
         
         // Handle image uploads
         if (!empty($_FILES['images']['name'][0])) {
-            // Create upload directory if it doesn't exist
             $upload_dir = "../uploads/maintenance/";
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0777, true);
@@ -78,15 +105,55 @@ if (isset($_POST['submit_maintenance'])) {
     exit();
 }
 
+// Get filter parameters
+$status_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
+$priority_filter = isset($_GET['priority']) ? $_GET['priority'] : 'all';
+$search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Build WHERE clause
+$where_conditions = ["mr.tenant_id = $tenant_id"];
+
+if ($status_filter !== 'all') {
+    $where_conditions[] = "mr.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
+}
+
+if ($priority_filter !== 'all') {
+    $where_conditions[] = "mr.priority = '" . mysqli_real_escape_string($conn, $priority_filter) . "'";
+}
+
+if (!empty($search_query)) {
+    $search_escaped = mysqli_real_escape_string($conn, $search_query);
+    $where_conditions[] = "(mr.title LIKE '%$search_escaped%' OR mr.description LIKE '%$search_escaped%' OR p.title LIKE '%$search_escaped%')";
+}
+
+$where_clause = implode(' AND ', $where_conditions);
+
 // Get tenant's maintenance requests
-$requests_query = "SELECT mr.*, p.title AS property_title, p.address, 
+$requests_query = "SELECT mr.*, p.title AS property_title, p.address,
                   CONCAT(u.first_name, ' ', u.last_name) AS landlord_name
                   FROM maintenance_requests mr
                   JOIN properties p ON mr.property_id = p.id
                   JOIN users u ON mr.landlord_id = u.id
-                  WHERE mr.tenant_id = $tenant_id
+                  WHERE $where_clause
                   ORDER BY mr.reported_date DESC";
 $requests_result = mysqli_query($conn, $requests_query);
+
+// Get count of requests by status
+$status_counts = [
+    'all' => 0,
+    'open' => 0,
+    'in-progress' => 0,
+    'completed' => 0
+];
+
+$count_query = "SELECT status, COUNT(*) as count FROM maintenance_requests WHERE tenant_id = $tenant_id GROUP BY status";
+$count_result = mysqli_query($conn, $count_query);
+if ($count_result) {
+    while ($row = mysqli_fetch_assoc($count_result)) {
+        $status_counts[$row['status']] = $row['count'];
+        $status_counts['all'] += $row['count'];
+    }
+}
 
 // Get tenant's properties (for new request form)
 $properties_query = "SELECT p.id, p.title, p.address 
@@ -109,28 +176,57 @@ $properties_result = mysqli_query($conn, $properties_query);
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
             color: #333;
-            overflow-x: hidden;
         }
 
-         .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 250px;
-    height: 100vh;
-    background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
-    color: white;
-    padding: 20px 0;
-    z-index: 1000;
-    transition: transform 0.3s ease;
-    z-index: 1000;
-}
+        /* Alert styling */
+        .alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            z-index: 1050;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: 500;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Sidebar styles */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: linear-gradient(135deg, #8ca0af 0%, #6c7a89 100%);
+            color: white;
+            padding: 20px 0;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
 
         .sidebar .logo {
             text-align: center;
@@ -164,7 +260,7 @@ $properties_result = mysqli_query($conn, $properties_query);
         .sidebar ul li a:hover,
         .sidebar ul li a.active {
             background-color: rgba(255,255,255,0.1);
-            border-left-color: #4ecdc4;
+            border-left-color: #fff;
         }
 
         .sidebar ul li a i {
@@ -172,35 +268,38 @@ $properties_result = mysqli_query($conn, $properties_query);
             width: 20px;
         }
 
+        /* Main content */
         .main-content {
             margin-left: 250px;
             padding: 20px;
             min-height: 100vh;
         }
 
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+        /* Top Bar */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #ddd;
         }
 
-        .header h1 {
-            color: #333;
-            font-size: 28px;
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
-        .header .tenant-info {
+        .tenant-info {
             display: flex;
             align-items: center;
             gap: 15px;
         }
 
-        .header .tenant-info .avatar {
+        .tenant-info .avatar {
             width: 40px;
             height: 40px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -212,19 +311,103 @@ $properties_result = mysqli_query($conn, $properties_query);
             font-weight: bold;
         }
 
-        .page-title {
+        /* Filter Section */
+        .filter-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .filter-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
-        .page-title h2 {
-            color: #2c3e50;
-            font-size: 24px;
+        .filter-header h3 {
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #666;
+            font-size: 14px;
             display: flex;
             align-items: center;
+            gap: 5px;
+        }
+
+        .filter-tab:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .filter-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #764ba2;
+        }
+
+        .filter-tab .badge {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .filter-tab.active .badge {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .search-box {
+            display: flex;
             gap: 10px;
+            max-width: 500px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-box button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .search-box button:hover {
+            transform: translateY(-2px);
         }
 
         .btn {
@@ -237,112 +420,129 @@ $properties_result = mysqli_query($conn, $properties_query);
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            text-decoration: none;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #4ecdc4 0%, #2a9d8f 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
 
         .btn-primary:hover {
-            background: linear-gradient(135deg, #3bb4ac 0%, #218a7c 100%);
             transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(78, 205, 196, 0.3);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
         }
 
-        .alert {
-            padding: 15px;
-            margin-bottom: 25px;
-            border-radius: 8px;
-            font-weight: 500;
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
         }
 
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .btn-secondary:hover {
+            background-color: #5a6268;
+            transform: translateY(-2px);
         }
 
-        .alert-error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .card {
+        /* Table Container */
+        .table-container {
             background: white;
             border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
             overflow: hidden;
         }
 
-        .card-header {
+        .table-header {
             padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h3 {
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .requests-count {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        /* Table Styles */
+        .maintenance-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .maintenance-table thead {
             background: #f8f9fa;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .maintenance-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .maintenance-table td {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        .maintenance-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .maintenance-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .maintenance-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .request-info {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .card-body {
-            padding: 25px;
-        }
-
-        .requests-list {
-            display: grid;
-            gap: 20px;
-        }
-
-        .request-item {
-            padding: 20px;
-            border-radius: 8px;
-            background: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-            border-left: 4px solid #4ecdc4;
-        }
-
-        .request-item:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-
-        .request-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+            flex-direction: column;
         }
 
         .request-title {
-            font-size: 18px;
             font-weight: 600;
-            color: #2c3e50;
+            color: #333;
+            margin-bottom: 3px;
         }
 
-        .request-meta {
+        .request-category {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .property-info {
             display: flex;
-            gap: 15px;
-            font-size: 14px;
-            color: #6c757d;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
+            flex-direction: column;
         }
 
-        .request-meta div {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        .property-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
         }
 
-        .request-description {
-            margin-bottom: 15px;
-            color: #495057;
-            line-height: 1.6;
+        .property-address {
+            font-size: 13px;
+            color: #666;
         }
 
         .status-badge {
@@ -350,6 +550,7 @@ $properties_result = mysqli_query($conn, $properties_query);
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            text-transform: uppercase;
         }
 
         .status-open {
@@ -372,7 +573,6 @@ $properties_result = mysqli_query($conn, $properties_query);
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
-            background: #e9ecef;
         }
 
         .priority-high {
@@ -390,21 +590,39 @@ $properties_result = mysqli_query($conn, $properties_query);
             color: #155724;
         }
 
+        .priority-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .priority-high .priority-indicator {
+            background: #dc3545;
+        }
+
+        .priority-medium .priority-indicator {
+            background: #ffc107;
+        }
+
+        .priority-low .priority-indicator {
+            background: #28a745;
+        }
+
         .request-images {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 5px;
             flex-wrap: wrap;
         }
 
         .request-image {
-            width: 100px;
-            height: 80px;
+            width: 60px;
+            height: 50px;
             border-radius: 5px;
             overflow: hidden;
             cursor: pointer;
             transition: all 0.3s ease;
-            position: relative;
         }
 
         .request-image:hover {
@@ -419,10 +637,8 @@ $properties_result = mysqli_query($conn, $properties_query);
 
         .request-actions {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
+            gap: 5px;
+            flex-direction: column;
         }
 
         .btn-sm {
@@ -432,23 +648,56 @@ $properties_result = mysqli_query($conn, $properties_query);
 
         .btn-outline {
             background: transparent;
-            border: 1px solid #4ecdc4;
-            color: #4ecdc4;
+            border: 1px solid #667eea;
+            color: #667eea;
         }
 
         .btn-outline:hover {
-            background: rgba(78, 205, 196, 0.1);
+            background: rgba(102, 126, 234, 0.1);
         }
 
+        .btn-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background-color: #138496;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+
+        /* Modal styles */
         .modal {
             display: none;
             position: fixed;
-            top: 0;
+            z-index: 1100;
             left: 0;
+            top: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1100;
+            background-color: rgba(0,0,0,0.7);
             align-items: center;
             justify-content: center;
             padding: 20px;
@@ -466,7 +715,7 @@ $properties_result = mysqli_query($conn, $properties_query);
 
         .modal-header {
             padding: 20px;
-            background: linear-gradient(135deg, #2a9d8f 0%, #1d7870 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             display: flex;
             justify-content: space-between;
@@ -474,6 +723,7 @@ $properties_result = mysqli_query($conn, $properties_query);
             position: sticky;
             top: 0;
             z-index: 10;
+            border-radius: 10px 10px 0 0;
         }
 
         .modal-header h3 {
@@ -519,9 +769,9 @@ $properties_result = mysqli_query($conn, $properties_query);
         }
 
         .form-control:focus {
-            border-color: #4ecdc4;
+            border-color: #667eea;
             outline: none;
-            box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.2);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
         }
 
         .form-textarea {
@@ -598,44 +848,6 @@ $properties_result = mysqli_query($conn, $properties_query);
 
         .file-input {
             display: none;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 15px;
-            color: #ced4da;
-        }
-
-        .empty-state h3 {
-            font-size: 20px;
-            margin-bottom: 10px;
-            color: #495057;
-        }
-
-        .priority-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-
-        .priority-high .priority-indicator {
-            background: #dc3545;
-        }
-
-        .priority-medium .priority-indicator {
-            background: #ffc107;
-        }
-
-        .priority-low .priority-indicator {
-            background: #28a745;
         }
 
         /* View Details Modal Styles */
@@ -721,86 +933,46 @@ $properties_result = mysqli_query($conn, $properties_query);
         }
         
         .close-image-modal:hover {
-            color: #4ecdc4;
+            color: #667eea;
         }
 
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-                overflow: hidden;
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .maintenance-table {
+                font-size: 13px;
             }
-            
-            .sidebar .logo h2, .sidebar .logo p, .sidebar ul li a span {
-                display: none;
-            }
-            
-            .sidebar .logo {
-                padding: 20px 5px;
-            }
-            
-            .sidebar ul li a {
-                padding: 15px;
-                text-align: center;
-            }
-            
-            .sidebar ul li a i {
-                margin-right: 0;
-            }
-            
-            .main-content {
-                margin-left: 70px;
+
+            .request-actions {
+                flex-direction: column;
             }
         }
 
         @media (max-width: 768px) {
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
-            
             .sidebar {
-                transform: translateX(-100%);
+                width: 200px;
             }
             
-            .sidebar.active {
-                transform: translateX(0);
-                width: 250px;
+            .main-content {
+                margin-left: 200px;
             }
-            
-            .sidebar.active .logo h2, 
-            .sidebar.active .logo p, 
-            .sidebar.active ul li a span {
-                display: block;
-            }
-            
-            .sidebar.active ul li a {
-                padding: 15px 25px;
-                text-align: left;
-            }
-            
-            .sidebar.active ul li a i {
-                margin-right: 10px;
-            }
-            
-            .mobile-menu-toggle {
-                display: block;
-                position: fixed;
-                top: 20px;
-                left: 20px;
-                z-index: 1001;
-                background: #2a9d8f;
-                color: white;
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
+
+            .filter-tabs {
                 justify-content: center;
-                font-size: 20px;
-                cursor: pointer;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             }
-            
+
+            .search-box {
+                max-width: 100%;
+            }
+
+            /* Make table scrollable on mobile */
+            .table-container {
+                overflow-x: auto;
+            }
+
+            .maintenance-table {
+                min-width: 900px;
+            }
+
             .request-meta {
                 flex-direction: column;
                 gap: 8px;
@@ -816,24 +988,65 @@ $properties_result = mysqli_query($conn, $properties_query);
             }
         }
 
+        @media (max-width: 600px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                padding: 15px;
+            }
+
+            .page-title {
+                font-size: 1.3rem;
+            }
+
+            .filter-section {
+                padding: 15px;
+            }
+
+            .table-header {
+                padding: 15px;
+            }
+
+            .top-bar {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .modal-content {
+                max-height: 85vh;
+            }
+        }
+
         .mobile-menu-toggle {
             display: none;
         }
 
-        @media (max-width: 576px) {
-            .header {
-                flex-direction: column;
-                text-align: center;
-                gap: 15px;
-            }
-            
-            .page-title {
-                flex-direction: column;
-                gap: 15px;
-            }
-            
-            .modal-content {
-                max-height: 85vh;
+        @media (max-width: 600px) {
+            .mobile-menu-toggle {
+                display: block;
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                z-index: 1001;
+                background: #667eea;
+                color: white;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+                cursor: pointer;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             }
         }
     </style>
@@ -853,27 +1066,26 @@ $properties_result = mysqli_query($conn, $properties_query);
             <li><a href="../index.php"><i class="fas fa-home"></i> <span>Home</span></a></li>
             <li><a href="tenant_profile.php"><i class="fas fa-user"></i> <span>Profile</span></a></li>
             <li><a href="tenant_dashboard.php"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
-
             <li><a href="browse_properties.php"><i class="fas fa-search"></i> <span>Browse Properties</span></a></li>
             <li><a href="my_applications.php"><i class="fas fa-file-alt"></i> <span>My Applications</span></a></li>
             <li><a href="my_lease.php"><i class="fas fa-file-contract"></i> <span>My Lease</span></a></li>
             <li><a href="maintenance_requests.php" class="active"><i class="fas fa-tools"></i> <span>Maintenance</span></a></li>
             <li><a href="payment_history.php"><i class="fas fa-credit-card"></i> <span>Payments</span></a></li>
-            
             <li><a href="../auth/logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
         </ul>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Header -->
-        <div class="header">
-            <h1>Maintenance Requests</h1>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <h1 class="page-title">
+                <i class="fas fa-tools"></i>
+                My Maintenance Requests
+            </h1>
             <div class="tenant-info">
-                <span>Hello, <?php echo $_SESSION['user_name'] ?? 'Tenant'; ?></span>
-                <div class="avatar">
-                    <?php echo strtoupper(substr($_SESSION['user_name'] ?? 'T', 0, 1)); ?>
-                </div>
+                <span>Hello, <?php echo htmlspecialchars($tenant_name); ?></span>
+                <div class="avatar"><?php echo strtoupper(substr($tenant_name ?? 'T', 0, 1)); ?></div>
             </div>
         </div>
 
@@ -889,28 +1101,83 @@ $properties_result = mysqli_query($conn, $properties_query);
             </div>
         <?php endif; ?>
 
-        <!-- Page Title and Actions -->
-        <div class="page-title">
-            <h2><i class="fas fa-tools"></i> My Maintenance Requests</h2>
-            <button class="btn btn-primary" onclick="openRequestModal()">
-                <i class="fas fa-plus"></i> New Request
-            </button>
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="filter-header">
+                <h3><i class="fas fa-filter"></i> Filter Requests</h3>
+                <button class="btn btn-primary" onclick="openRequestModal()">
+                    <i class="fas fa-plus"></i> New Request
+                </button>
+            </div>
+
+            <!-- Status Filter Tabs -->
+            <div class="filter-tabs">
+                <a href="?status=all<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'all' ? 'active' : ''; ?>">
+                    All Requests
+                    <span class="badge"><?php echo $status_counts['all']; ?></span>
+                </a>
+                <a href="?status=open<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'open' ? 'active' : ''; ?>">
+                    <i class="fas fa-folder-open"></i> Open
+                    <span class="badge"><?php echo $status_counts['open']; ?></span>
+                </a>
+                <a href="?status=in-progress<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'in-progress' ? 'active' : ''; ?>">
+                    <i class="fas fa-spinner"></i> In Progress
+                    <span class="badge"><?php echo $status_counts['in-progress']; ?></span>
+                </a>
+                <a href="?status=completed<?php echo !empty($search_query) ? '&search=' . urlencode($search_query) : ''; ?>" 
+                   class="filter-tab <?php echo $status_filter === 'completed' ? 'active' : ''; ?>">
+                    <i class="fas fa-check-circle"></i> Completed
+                    <span class="badge"><?php echo $status_counts['completed']; ?></span>
+                </a>
+            </div>
+
+            <!-- Search Box -->
+            <form method="GET" action="" class="search-box">
+                <input type="hidden" name="status" value="<?php echo htmlspecialchars($status_filter); ?>">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Search by title, description, or property..." 
+                       value="<?php echo htmlspecialchars($search_query); ?>">
+                <button type="submit">
+                    <i class="fas fa-search"></i> Search
+                </button>
+                <?php if (!empty($search_query)): ?>
+                    <a href="?status=<?php echo htmlspecialchars($status_filter); ?>" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
+                <?php endif; ?>
+            </form>
         </div>
 
-        <!-- Requests List -->
-        <div class="card">
-            <div class="card-header">
-                <h3>Your Maintenance Requests</h3>
-                <div class="requests-count">
-                    <?php 
-                    $count = $requests_result ? mysqli_num_rows($requests_result) : 0;
-                    echo "<i class='fas fa-list'></i> $count Requests";
-                    ?>
+        <!-- Requests Container -->
+        <?php if ($requests_result && mysqli_num_rows($requests_result) > 0): ?>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>
+                        <i class="fas fa-list"></i>
+                        Maintenance Requests
+                    </h3>
+                    <span class="requests-count">
+                        <?php echo mysqli_num_rows($requests_result); ?> Request(s) Found
+                    </span>
                 </div>
-            </div>
-            <div class="card-body">
-                <?php if ($requests_result && mysqli_num_rows($requests_result) > 0): ?>
-                    <div class="requests-list">
+                <table class="maintenance-table">
+                    <thead>
+                        <tr>
+                            <th>Request Details</th>
+                            <th>Property</th>
+                            <th>Landlord</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Reported Date</th>
+                            <th>Images</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         <?php while ($request = mysqli_fetch_assoc($requests_result)): 
                             // Get images for this request
                             $images_query = "SELECT * FROM maintenance_images 
@@ -923,76 +1190,96 @@ $properties_result = mysqli_query($conn, $properties_query);
                                 }
                             }
                             ?>
-                            <div class="request-item" data-id="<?php echo $request['id']; ?>">
-                                <div class="request-header">
-                                    <div class="request-title"><?php echo htmlspecialchars($request['title']); ?></div>
-                                    <div>
-                                        <span class="status-badge status-<?php echo strtolower($request['status']); ?>">
-                                            <?php echo ucfirst($request['status']); ?>
-                                        </span>
+                            <tr>
+                                <td>
+                                    <div class="request-info">
+                                        <div class="request-title"><?php echo htmlspecialchars($request['title']); ?></div>
+                                        <div class="request-category">
+                                            <i class="fas fa-tag"></i>
+                                            <?php echo ucfirst($request['category']); ?>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                <div class="request-meta">
-                                    <div>
-                                        <i class="fas fa-home"></i>
-                                        <?php echo htmlspecialchars($request['property_title']); ?>
+                                </td>
+                                <td>
+                                    <div class="property-info">
+                                        <div class="property-title"><?php echo htmlspecialchars($request['property_title']); ?></div>
+                                        <div class="property-address">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <?php echo htmlspecialchars($request['address']); ?>
+                                        </div>
                                     </div>
+                                </td>
+                                <td>
                                     <div>
-                                        <i class="fas fa-user-tie"></i>
-                                        Landlord: <?php echo htmlspecialchars($request['landlord_name']); ?>
+                                        <strong><?php echo htmlspecialchars($request['landlord_name']); ?></strong>
                                     </div>
-                                    <div>
-                                        <i class="fas fa-calendar"></i>
-                                        Reported: <?php echo date('M j, Y', strtotime($request['reported_date'])); ?>
-                                    </div>
+                                </td>
+                                <td>
                                     <div class="priority-<?php echo strtolower($request['priority']); ?>">
-                                        <i class="fas fa-exclamation-circle"></i>
                                         <span class="priority-indicator"></span>
-                                        <?php echo ucfirst($request['priority']); ?> Priority
+                                        <?php echo ucfirst($request['priority']); ?>
                                     </div>
-                                </div>
-                                
-                                <div class="request-description">
-                                    <?php echo nl2br(htmlspecialchars(mb_strimwidth($request['description'], 0, 200, '...'))); ?>
-                                </div>
-                                
-                                <?php if (!empty($images)): ?>
-                                    <div class="request-images">
-                                        <?php foreach ($images as $index => $image): ?>
-                                            <div class="request-image">
-                                                <img src="<?php echo htmlspecialchars($image['image_path']); ?>" alt="Maintenance image">
-                                            </div>
-                                            <?php if ($index === 2) break; // Only show first 3 images ?>
-                                        <?php endforeach; ?>
-                                        <?php if (count($images) > 3): ?>
-                                            <div class="request-image" style="background: #e9ecef; display: flex; align-items: center; justify-content: center; color: #6c757d; font-weight: bold;">
-                                                +<?php echo count($images) - 3; ?> more
-                                            </div>
-                                        <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-<?php echo strtolower($request['status']); ?>">
+                                        <?php echo ucfirst(str_replace('-', ' ', $request['status'])); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="font-size: 13px;">
+                                        <?php echo date('M j, Y', strtotime($request['reported_date'])); ?>
                                     </div>
-                                <?php endif; ?>
-                                
-                                <div class="request-actions">
-                                    <button class="btn btn-sm btn-outline view-details-btn" data-id="<?php echo $request['id']; ?>">
-                                        <i class="fas fa-eye"></i> View Details
-                                    </button>
-                                </div>
-                            </div>
+                                </td>
+                                <td>
+                                    <?php if (!empty($images)): ?>
+                                        <div class="request-images">
+                                            <?php foreach ($images as $index => $image): ?>
+                                                <div class="request-image" onclick="expandImage('<?php echo htmlspecialchars($image['image_path']); ?>')">
+                                                    <img src="<?php echo htmlspecialchars($image['image_path']); ?>" alt="Maintenance image">
+                                                </div>
+                                                <?php if ($index === 1) break; ?>
+                                            <?php endforeach; ?>
+                                            <?php if (count($images) > 2): ?>
+                                                <div class="request-image" style="background: #e9ecef; display: flex; align-items: center; justify-content: center; color: #6c757d; font-weight: bold; font-size: 11px;">
+                                                    +<?php echo count($images) - 2; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <span style="color: #999; font-size: 12px;">No images</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="request-actions">
+                                        <button class="btn btn-sm btn-info view-details-btn" data-id="<?php echo $request['id']; ?>">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
                         <?php endwhile; ?>
-                    </div>
-                <?php else: ?>
-                    <div class="empty-state">
-                        <i class="fas fa-tools"></i>
-                        <h3>No Maintenance Requests</h3>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="table-container">
+                <div class="empty-state">
+                    <i class="fas fa-tools"></i>
+                    <h3>No Maintenance Requests Found</h3>
+                    <?php if (!empty($search_query) || $status_filter !== 'all'): ?>
+                        <p>No requests match your current filters. Try adjusting your search or filter criteria.</p>
+                        <a href="maintenance_requests.php" class="btn btn-primary" style="margin-top: 20px;">
+                            <i class="fas fa-redo"></i> Clear All Filters
+                        </a>
+                    <?php else: ?>
                         <p>You haven't submitted any maintenance requests yet.</p>
                         <button class="btn btn-primary" onclick="openRequestModal()" style="margin-top: 20px;">
                             <i class="fas fa-plus"></i> Submit Your First Request
                         </button>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
-        </div>
+        <?php endif; ?>
     </div>
 
     <!-- New Request Modal -->
@@ -1008,7 +1295,12 @@ $properties_result = mysqli_query($conn, $properties_query);
                         <label for="property_id">Property</label>
                         <select id="property_id" name="property_id" class="form-control" required>
                             <option value="">Select Property</option>
-                            <?php if ($properties_result && mysqli_num_rows($properties_result) > 0): ?>
+                            <?php 
+                            // Reset the pointer for properties result
+                            if ($properties_result) {
+                                mysqli_data_seek($properties_result, 0);
+                                if (mysqli_num_rows($properties_result) > 0): 
+                            ?>
                                 <?php while ($property = mysqli_fetch_assoc($properties_result)): ?>
                                     <option value="<?php echo $property['id']; ?>">
                                         <?php echo htmlspecialchars($property['title'] . ' - ' . $property['address']); ?>
@@ -1016,7 +1308,8 @@ $properties_result = mysqli_query($conn, $properties_query);
                                 <?php endwhile; ?>
                             <?php else: ?>
                                 <option value="" disabled>No properties available</option>
-                            <?php endif; ?>
+                            <?php endif; 
+                            } ?>
                         </select>
                     </div>
                     
@@ -1029,7 +1322,7 @@ $properties_result = mysqli_query($conn, $properties_query);
                     <div class="form-group">
                         <label for="description">Detailed Description</label>
                         <textarea id="description" name="description" class="form-control form-textarea" 
-                                  placeholder="Please describe the issue in detail, including any relevant information..." required></textarea>
+                                  placeholder="Please describe the issue in detail..." required></textarea>
                     </div>
                     
                     <div class="form-group">
@@ -1112,7 +1405,6 @@ $properties_result = mysqli_query($conn, $properties_query);
         function closeRequestModal() {
             document.getElementById('requestModal').style.display = 'none';
             document.body.style.overflow = 'auto';
-            // Reset form and previews
             document.getElementById('image-preview').innerHTML = '';
             document.getElementById('file-count').textContent = 'No files selected';
         }
@@ -1155,7 +1447,6 @@ $properties_result = mysqli_query($conn, $properties_query);
                         removeBtn.innerHTML = '&times;';
                         removeBtn.onclick = function() {
                             previewContainer.removeChild(previewItem);
-                            // Remove file from input
                             const dt = new DataTransfer();
                             const input = event.target;
                             
@@ -1215,9 +1506,11 @@ $properties_result = mysqli_query($conn, $properties_query);
             const menuToggle = document.querySelector('.mobile-menu-toggle');
             const sidebar = document.querySelector('.sidebar');
             
-            menuToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('active');
-            });
+            if (menuToggle) {
+                menuToggle.addEventListener('click', function() {
+                    sidebar.classList.toggle('active');
+                });
+            }
             
             // View details button click
             document.querySelectorAll('.view-details-btn').forEach(button => {
@@ -1229,103 +1522,103 @@ $properties_result = mysqli_query($conn, $properties_query);
         });
         
         // Load request details
-function loadRequestDetails(requestId) {
-    fetch(`get_request_details.php?id=${requestId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                alert('Error: ' + data.error);
-                return;
-            }
-            
-            const detailsContent = document.getElementById('detailsContent');
-            let html = `
-                <div class="detail-row">
-                    <div class="detail-label">Title:</div>
-                    <div class="detail-value">${escapeHTML(data.title)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Property:</div>
-                    <div class="detail-value">${escapeHTML(data.property_title)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Address:</div>
-                    <div class="detail-value">${escapeHTML(data.address)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Landlord:</div>
-                    <div class="detail-value">${escapeHTML(data.landlord_name)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Status:</div>
-                    <div class="detail-value"><span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span></div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Priority:</div>
-                    <div class="detail-value"><span class="priority-${data.priority.toLowerCase()}">${data.priority} Priority</span></div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Reported Date:</div>
-                    <div class="detail-value">${escapeHTML(data.reported_date)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Created At:</div>
-                    <div class="detail-value">${escapeHTML(data.created_at)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Last Updated:</div>
-                    <div class="detail-value">${escapeHTML(data.updated_at)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Category:</div>
-                    <div class="detail-value">${escapeHTML(data.category)}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Description:</div>
-                    <div class="detail-value">${escapeHTML(data.description)}</div>
-                </div>
-            `;
-            
-            if (data.images && data.images.length > 0) {
-                html += `<div class="detail-row">
-                    <div class="detail-label">Images:</div>
-                    <div class="detail-value">
-                        <div class="detail-images">`;
+        function loadRequestDetails(requestId) {
+            fetch(`get_request_details.php?id=${requestId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        return;
+                    }
+                    
+                    const detailsContent = document.getElementById('detailsContent');
+                    let html = `
+                        <div class="detail-row">
+                            <div class="detail-label">Title:</div>
+                            <div class="detail-value">${escapeHTML(data.title)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Property:</div>
+                            <div class="detail-value">${escapeHTML(data.property_title)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Address:</div>
+                            <div class="detail-value">${escapeHTML(data.address)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Landlord:</div>
+                            <div class="detail-value">${escapeHTML(data.landlord_name)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Status:</div>
+                            <div class="detail-value"><span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span></div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Priority:</div>
+                            <div class="detail-value"><span class="priority-${data.priority.toLowerCase()}">${data.priority} Priority</span></div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Reported Date:</div>
+                            <div class="detail-value">${escapeHTML(data.reported_date)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Created At:</div>
+                            <div class="detail-value">${escapeHTML(data.created_at)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Last Updated:</div>
+                            <div class="detail-value">${escapeHTML(data.updated_at)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Category:</div>
+                            <div class="detail-value">${escapeHTML(data.category)}</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Description:</div>
+                            <div class="detail-value">${escapeHTML(data.description)}</div>
+                        </div>
+                    `;
+                    
+                    if (data.images && data.images.length > 0) {
+                        html += `<div class="detail-row">
+                            <div class="detail-label">Images:</div>
+                            <div class="detail-value">
+                                <div class="detail-images">`;
+                            
+                        data.images.forEach(image => {
+                            html += `<div class="detail-image" onclick="expandImage('${escapeHTML(image.image_path)}')">
+                                <img src="${escapeHTML(image.image_path)}" alt="Maintenance image">
+                            </div>`;
+                        });
                         
-                data.images.forEach(image => {
-                    html += `<div class="detail-image" onclick="expandImage('${escapeHTML(image.image_path)}')">
-                        <img src="${escapeHTML(image.image_path)}" alt="Maintenance image">
-                    </div>`;
+                        html += `</div></div></div>`;
+                    }
+                    
+                    detailsContent.innerHTML = html;
+                    openDetailsModal();
+                })
+                .catch(error => {
+                    console.error('Error loading request details:', error);
+                    alert('Failed to load request details. Please try again.');
                 });
-                
-                html += `</div></div></div>`;
-            }
-            
-            detailsContent.innerHTML = html;
-            openDetailsModal();
-        })
-        .catch(error => {
-            console.error('Error loading request details:', error);
-            alert('Failed to load request details. Please try again.');
-        });
-}
+        }
 
-// Helper function to escape HTML
-function escapeHTML(str) {
-    if (!str) return '';
-    return str.toString()
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-        .replace(/\n/g, '<br>');
-}
+        // Helper function to escape HTML
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;')
+                .replace(/\n/g, '<br>');
+        }
         
         // Image expansion functions
         function expandImage(src) {

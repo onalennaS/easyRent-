@@ -26,6 +26,7 @@ $landlord_id = $_SESSION['user_id'];
 $property_filter = $_GET['property'] ?? '';
 $status_filter = $_GET['status'] ?? '';
 $priority_filter = $_GET['priority'] ?? '';
+$search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // Build the base query with parameterized filtering
 $maintenance_query = "
@@ -61,6 +62,15 @@ if ($priority_filter) {
     $maintenance_query .= " AND mr.priority = ?";
     $params[] = $priority_filter;
     $types .= "s";
+}
+
+if (!empty($search_query)) {
+    $maintenance_query .= " AND (mr.title LIKE ? OR mr.description LIKE ? OR p.title LIKE ?)";
+    $search_param = "%$search_query%";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $types .= "sss";
 }
 
 $maintenance_query .= " ORDER BY mr.created_at DESC";
@@ -346,7 +356,7 @@ function formatCurrency($amount) {
             border: 1px solid #fecaca;
         }
 
-        /* Stats Grid – Colorful & Unique Style */
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -574,64 +584,113 @@ function formatCurrency($amount) {
             background: rgba(59, 130, 246, 0.1);
         }
 
-        /* Requests List */
-        .requests-list {
-            background: white;
-            border-radius: 16px;
-            padding: 2rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e5e7eb;
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
         }
 
-        .card-header {
+        /* Table Container */
+        .table-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 1.5rem 2rem;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid #e5e7eb;
         }
 
-        .card-title {
+        .table-header h2 {
             font-size: 1.5rem;
             font-weight: 600;
-            color: #1e293b;
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
 
-        .request-item {
-            padding: 1.5rem;
-            border-radius: 12px;
-            background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 1.5rem;
-            border-left: 4px solid;
-            transition: all 0.3s ease;
+        .requests-count {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
         }
 
-        .request-item:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        /* Table Styles */
+        .maintenance-table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
-        .request-item.open { border-left-color: #8b7bce; }
-        .request-item.assigned { border-left-color: #7ec8c3; }
-        .request-item.in_progress { border-left-color: #f4a79d; }
-        .request-item.completed { border-left-color: #6bcf9d; }
+        .maintenance-table thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
 
-        .request-header {
+        .maintenance-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .maintenance-table td {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        .maintenance-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .maintenance-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .maintenance-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .request-info {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
+            flex-direction: column;
         }
 
         .request-title {
-            font-size: 1.25rem;
             font-weight: 600;
-            color: #1e293b;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .request-category {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .property-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .property-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .property-address {
+            font-size: 13px;
+            color: #666;
         }
 
         .status-badge {
@@ -640,6 +699,7 @@ function formatCurrency($amount) {
             font-size: 0.875rem;
             font-weight: 600;
             text-transform: capitalize;
+            display: inline-block;
         }
 
         .status-open { background: #ede9fe; color: #6b5bb0; }
@@ -647,46 +707,55 @@ function formatCurrency($amount) {
         .status-in_progress { background: #ffe8e0; color: #e8907f; }
         .status-completed { background: #d1f4e0; color: #4fb883; }
 
-        .request-meta {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
+        .priority-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
         }
 
-        .meta-group {
+        .priority-high .priority-indicator {
+            background: #dc3545;
+        }
+
+        .priority-medium .priority-indicator {
+            background: #ffc107;
+        }
+
+        .priority-low .priority-indicator {
+            background: #28a745;
+        }
+
+        .request-images {
             display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
+            gap: 5px;
+            flex-wrap: wrap;
         }
 
-        .meta-label {
-            font-size: 0.875rem;
-            color: #64748b;
-            font-weight: 500;
+        .request-image {
+            width: 60px;
+            height: 50px;
+            border-radius: 5px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
-        .meta-value {
-            font-size: 1rem;
-            font-weight: 500;
-            color: #1e293b;
+        .request-image:hover {
+            transform: scale(1.05);
         }
 
-        .request-description {
-            background: #f1f5f9;
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-            color: #334155;
-            line-height: 1.7;
+        .request-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .request-actions {
             display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #e5e7eb;
+            gap: 5px;
+            flex-direction: column;
         }
 
         /* Empty State */
@@ -862,31 +931,6 @@ function formatCurrency($amount) {
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
         }
 
-        /* Images displayed in pairs */
-        .request-images {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .request-image {
-            cursor: pointer;
-            border-radius: 8px;
-            overflow: hidden;
-            transition: transform 0.3s ease;
-        }
-
-        .request-image:hover {
-            transform: scale(1.05);
-        }
-
-        .request-image img {
-            width: 100%;
-            height: 100px;
-            object-fit: cover;
-        }
-
         .action-form {
             margin-bottom: 20px;
         }
@@ -921,6 +965,16 @@ function formatCurrency($amount) {
         }
 
         /* Responsive Design */
+        @media (max-width: 1024px) {
+            .maintenance-table {
+                font-size: 13px;
+            }
+
+            .request-actions {
+                flex-direction: column;
+            }
+        }
+
         @media (max-width: 900px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -933,21 +987,26 @@ function formatCurrency($amount) {
             
             .main-content {
                 margin-left: 0;
-                width: 100%;
+                max-width: 100%;
             }
             
             .mobile-menu-btn {
                 display: block;
+            }
+
+            /* Make table scrollable on tablet */
+            .table-container {
+                overflow-x: auto;
+            }
+
+            .maintenance-table {
+                min-width: 1000px;
             }
         }
 
         @media (max-width: 768px) {
             .main-content {
                 padding: 1rem;
-            }
-
-            .card-title {
-                font-size: 1.25rem;
             }
 
             .filter-row {
@@ -967,27 +1026,12 @@ function formatCurrency($amount) {
                 padding: 1rem;
             }
 
-            .request-meta {
-                grid-template-columns: 1fr;
-            }
-
             .details-grid {
                 grid-template-columns: 1fr;
             }
         }
 
         @media (max-width: 640px) {
-            .request-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .request-actions {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
             .action-form {
                 width: 100%;
             }
@@ -999,16 +1043,6 @@ function formatCurrency($amount) {
 
             .btn {
                 justify-content: center;
-            }
-
-            /* Keep pairs even on mobile */
-            .request-images {
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-            }
-
-            .request-image img {
-                height: 80px;
             }
 
             .stat-card {
@@ -1135,12 +1169,16 @@ function formatCurrency($amount) {
                     <label for="property">Property</label>
                     <select id="property" name="property" class="filter-control">
                         <option value="">All Properties</option>
-                        <?php while ($property = mysqli_fetch_assoc($properties_result)): ?>
+                        <?php 
+                        if ($properties_result) {
+                            mysqli_data_seek($properties_result, 0);
+                            while ($property = mysqli_fetch_assoc($properties_result)): 
+                        ?>
                             <?php $selected = $property['id'] == $property_filter ? 'selected' : ''; ?>
                             <option value="<?php echo $property['id']; ?>" <?php echo $selected; ?>>
                                 <?php echo htmlspecialchars($property['title']); ?>
                             </option>
-                        <?php endwhile; ?>
+                        <?php endwhile; } ?>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -1162,6 +1200,12 @@ function formatCurrency($amount) {
                         <option value="high" <?php echo $priority_filter === 'high' ? 'selected' : ''; ?>>High</option>
                     </select>
                 </div>
+                <div class="filter-group">
+                    <label for="search">Search</label>
+                    <input type="text" id="search" name="search" class="filter-control" 
+                           placeholder="Search by title, description..." 
+                           value="<?php echo htmlspecialchars($search_query); ?>">
+                </div>
             </div>
             <div class="filter-actions">
                 <button type="button" class="btn btn-outline" onclick="resetFilters()">
@@ -1175,89 +1219,130 @@ function formatCurrency($amount) {
             </div>
         </form>
 
-        <!-- Requests List -->
-        <div class="requests-list">
-            <div class="card-header">
-                <h2 class="card-title">
-                    <i class="fas fa-tools"></i>
-                    Maintenance Requests
-                </h2>
-            </div>
-
-            <?php if ($maintenance_result && mysqli_num_rows($maintenance_result) > 0): ?>
-                <?php while ($request = mysqli_fetch_assoc($maintenance_result)): 
-                    // Get images for this request
-                    $images_query = "SELECT * FROM maintenance_images 
-                                    WHERE maintenance_request_id = {$request['id']}";
-                    $images_result = mysqli_query($conn, $images_query);
-                    $images = [];
-                    if ($images_result) {
-                        while ($image = mysqli_fetch_assoc($images_result)) {
-                            $images[] = $image['image_path'];
-                        }
-                    }
-                ?>
-                    <div class="request-item <?php echo $request['status']; ?>">
-                        <div class="request-header">
-                            <h3 class="request-title"><?php echo htmlspecialchars($request['title']); ?></h3>
-                            <span class="status-badge status-<?php echo $request['status']; ?>">
-                                <?php echo ucfirst(str_replace('_', ' ', $request['status'])); ?>
-                            </span>
-                        </div>
-
-                        <div class="request-meta">
-                            <div class="meta-group">
-                                <span class="meta-label">Property</span>
-                                <span class="meta-value"><?php echo htmlspecialchars($request['property_title']); ?></span>
-                            </div>
-                            <div class="meta-group">
-                                <span class="meta-label">Tenant</span>
-                                <span class="meta-value"><?php echo htmlspecialchars($request['tenant_name']); ?></span>
-                            </div>
-                            <div class="meta-group">
-                                <span class="meta-label">Reported On</span>
-                                <span class="meta-value"><?php echo formatDate($request['reported_date']); ?></span>
-                            </div>
-                            <div class="meta-group">
-                                <span class="meta-label">Priority</span>
-                                <span class="meta-value"><?php echo ucfirst($request['priority']); ?></span>
-                            </div>
-                        </div>
-
-                        <div class="request-description">
-                            <?php echo nl2br(htmlspecialchars($request['description'])); ?>
-                        </div>
-
-                        <?php if (!empty($images)): ?>
-                            <div class="request-images">
-                                <?php foreach ($images as $image): ?>
-                                    <div class="request-image" onclick="openImageModal('<?php echo $image; ?>')">
-                                        <img src="<?php echo $image; ?>" alt="Maintenance photo">
+        <!-- Requests Table -->
+        <?php if ($maintenance_result && mysqli_num_rows($maintenance_result) > 0): ?>
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>
+                        <i class="fas fa-tools"></i>
+                        Maintenance Requests
+                    </h2>
+                    <span class="requests-count">
+                        <?php echo mysqli_num_rows($maintenance_result); ?> Request(s) Found
+                    </span>
+                </div>
+                <table class="maintenance-table">
+                    <thead>
+                        <tr>
+                            <th>Request Details</th>
+                            <th>Property</th>
+                            <th>Tenant</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Reported Date</th>
+                            <th>Images</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($request = mysqli_fetch_assoc($maintenance_result)): 
+                            // Get images for this request
+                            $images_query = "SELECT * FROM maintenance_images 
+                                            WHERE maintenance_request_id = {$request['id']}";
+                            $images_result = mysqli_query($conn, $images_query);
+                            $images = [];
+                            if ($images_result) {
+                                while ($image = mysqli_fetch_assoc($images_result)) {
+                                    $images[] = $image['image_path'];
+                                }
+                            }
+                        ?>
+                            <tr>
+                                <td>
+                                    <div class="request-info">
+                                        <div class="request-title"><?php echo htmlspecialchars($request['title']); ?></div>
+                                        <div class="request-category">
+                                            <i class="fas fa-tag"></i>
+                                            <?php echo ucfirst($request['category'] ?? 'N/A'); ?>
+                                        </div>
                                     </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <div class="request-actions">
-                            <button class="btn btn-primary" onclick="openDetailsModal(<?php echo $request['id']; ?>)">
-                                <i class="fas fa-eye"></i>
-                                View Details
-                            </button>
-                            <button class="btn btn-warning" onclick="openManageModal(<?php echo $request['id']; ?>)">
-                                <i class="fas fa-cog"></i>
-                                Manage Request
-                            </button>
-                        </div>
-                    </div>
-                <?php endwhile; ?>
-            <?php else: ?>
+                                </td>
+                                <td>
+                                    <div class="property-info">
+                                        <div class="property-title"><?php echo htmlspecialchars($request['property_title']); ?></div>
+                                        <div class="property-address">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <?php echo htmlspecialchars($request['property_address']); ?>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong><?php echo htmlspecialchars($request['tenant_name']); ?></strong>
+                                    </div>
+                                    <div style="font-size: 12px; color: #666;">
+                                        <?php echo htmlspecialchars($request['tenant_email']); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="priority-<?php echo strtolower($request['priority']); ?>">
+                                        <span class="priority-indicator"></span>
+                                        <?php echo ucfirst($request['priority']); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-<?php echo $request['status']; ?>">
+                                        <?php echo ucfirst(str_replace('_', ' ', $request['status'])); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="font-size: 13px;">
+                                        <?php echo date('M j, Y', strtotime($request['reported_date'])); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php if (!empty($images)): ?>
+                                        <div class="request-images">
+                                            <?php foreach ($images as $index => $image): ?>
+                                                <div class="request-image" onclick="openImageModal('<?php echo htmlspecialchars($image); ?>')">
+                                                    <img src="<?php echo htmlspecialchars($image); ?>" alt="Maintenance image">
+                                                </div>
+                                                <?php if ($index === 1) break; ?>
+                                            <?php endforeach; ?>
+                                            <?php if (count($images) > 2): ?>
+                                                <div class="request-image" style="background: #e9ecef; display: flex; align-items: center; justify-content: center; color: #6c757d; font-weight: bold; font-size: 11px;">
+                                                    +<?php echo count($images) - 2; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <span style="color: #999; font-size: 12px;">No images</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="request-actions">
+                                        <button class="btn btn-primary btn-sm" onclick="openDetailsModal(<?php echo $request['id']; ?>)">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <button class="btn btn-warning btn-sm" onclick="openManageModal(<?php echo $request['id']; ?>)">
+                                            <i class="fas fa-cog"></i> Manage
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="table-container">
                 <div class="empty-state">
                     <i class="fas fa-check-circle"></i>
                     <h3>No Maintenance Requests</h3>
                     <p>You don't have any maintenance requests at this time.</p>
                 </div>
-            <?php endif; ?>
-        </div>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Modals -->
@@ -1355,7 +1440,7 @@ function formatCurrency($amount) {
                         'tenant' => $request['tenant_name'],
                         'reported_date' => formatDate($request['reported_date']),
                         'priority' => $request['priority'],
-                        'category' => $request['category'],
+                        'category' => $request['category'] ?? 'N/A',
                         'description' => $request['description'],
                         'contractor_assigned' => $request['contractor_assigned'] ?? '',
                         'contractor_contact' => $request['contractor_contact'] ?? '',
@@ -1364,9 +1449,9 @@ function formatCurrency($amount) {
                         'landlord_notes' => $request['landlord_notes'] ?? '',
                         'tenant_rating' => $request['tenant_rating'] ?? '',
                         'tenant_feedback' => $request['tenant_feedback'] ?? '',
-                        'acknowledged_date' => formatDate($request['acknowledged_date']),
-                        'started_date' => formatDate($request['started_date']),
-                        'completed_date' => formatDate($request['completed_date']),
+                        'acknowledged_date' => formatDate($request['acknowledged_date'] ?? ''),
+                        'started_date' => formatDate($request['started_date'] ?? ''),
+                        'completed_date' => formatDate($request['completed_date'] ?? ''),
                         'created_at' => formatDate($request['created_at']),
                         'updated_at' => formatDate($request['updated_at']),
                         'images' => $images
@@ -1391,9 +1476,9 @@ function formatCurrency($amount) {
                 imagesHTML = `
                     <div class="modal-section">
                         <h4>Attached Images</h4>
-                        <div class="request-images">
+                        <div class="request-images" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             ${request.images.map(img => `
-                                <div class="request-image" onclick="openImageModal('${img}')">
+                                <div class="request-image" style="width: 100%; height: 100px;" onclick="openImageModal('${img}')">
                                     <img src="${img}" alt="Maintenance photo">
                                 </div>
                             `).join('')}
@@ -1443,7 +1528,7 @@ function formatCurrency($amount) {
 
                 <div class="modal-section">
                     <h4>Description</h4>
-                    <div class="request-description">
+                    <div class="request-description" style="background: #f1f5f9; border-radius: 8px; padding: 1.25rem; color: #334155; line-height: 1.7;">
                         ${request.description.replace(/\n/g, '<br>')}
                     </div>
                 </div>
@@ -1477,7 +1562,7 @@ function formatCurrency($amount) {
                 ${request.landlord_notes ? `
                 <div class="modal-section">
                     <h4>Landlord Notes</h4>
-                    <div class="request-description">
+                    <div class="request-description" style="background: #f1f5f9; border-radius: 8px; padding: 1.25rem; color: #334155; line-height: 1.7;">
                         ${request.landlord_notes.replace(/\n/g, '<br>')}
                     </div>
                 </div>
@@ -1486,7 +1571,7 @@ function formatCurrency($amount) {
                 ${imagesHTML}
             `;
 
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
         }
 
         function openManageModal(requestId) {
@@ -1591,7 +1676,7 @@ function formatCurrency($amount) {
                 </div>
             `;
 
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
         }
 
         function closeDetailsModal() {
@@ -1606,7 +1691,7 @@ function formatCurrency($amount) {
             const modal = document.getElementById('imageModal');
             const modalImage = document.getElementById('modalImage');
             modalImage.src = imageSrc;
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
         }
 
         function closeImageModal() {
@@ -1617,6 +1702,7 @@ function formatCurrency($amount) {
             document.getElementById('property').value = '';
             document.getElementById('status').value = '';
             document.getElementById('priority').value = '';
+            document.getElementById('search').value = '';
             document.querySelector('.filters').submit();
         }
 
@@ -1636,6 +1722,19 @@ function formatCurrency($amount) {
                 closeManageModal();
                 closeImageModal();
             }
+        });
+
+        // Auto-hide alerts after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                setTimeout(function() {
+                    alert.style.opacity = '0';
+                    setTimeout(function() {
+                        alert.style.display = 'none';
+                    }, 300);
+                }, 5000);
+            });
         });
     </script>
 </body>

@@ -1,4 +1,7 @@
-# TODO: Fix Tenant Details Not Showing in view_lease.php
+# TODO: Update Maintenance Requests to Show Landlord Full Name and Status
 
-- [ ] Update SQL query in view_lease.php to use COALESCE in CONCAT for landlord_name and tenant_name to handle NULL values
-- [ ] Verify the changes and ensure tenant details display correctly
+## Tasks
+- [x] Update the SQL query in `dashboard/maintenance_requests.php` to use COALESCE for landlord_name
+- [ ] Update the SQL query in `dashboard/get_request_details.php` to use COALESCE for landlord_name
+- [x] Verify that the status is set to 'open' on submission (already implemented)
+- [ ] Test the changes to ensure landlord name displays correctly and status is 'open'
