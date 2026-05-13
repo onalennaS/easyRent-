@@ -87,7 +87,7 @@ if ($isLoggedIn) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasyRent - Professional Property Management</title>
+    <title>L&T Connect - Professional Property Management</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     <!-- Add SweetAlert CSS -->
@@ -640,9 +640,8 @@ if ($isLoggedIn) {
     <!-- Mobile Navigation -->
     <div id="mobileNavContainer" class="mobile-nav-container">
         <div class="mobile-nav-header">
-            <div>
-                <h1 class="text-xl font-bold text-gray-900">EasyRent</h1>
-                <p class="text-xs text-blue-600">Property Management</p>
+            <div class="flex items-center">
+                <img src="logo.png" alt="L&T Connect Logo" class="h-45 w-auto">
             </div>
             <button onclick="closeMobileNav()" class="text-gray-700 hover:text-red-600 transition-colors">
                 <i class="fas fa-times text-xl"></i>
@@ -700,12 +699,11 @@ if ($isLoggedIn) {
     <!-- Desktop Navigation -->
 <nav class="navbar fixed w-full top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
+        <div class="flex justify-between items-center h-20">
             <!-- Logo -->
             <div class="flex items-center">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900">EasyRent</h1>
-                    <p class="text-xs text-blue-600">Property Management</p>
+                <div class="flex items-center">
+                    <img src="logo.png" alt="L&T Connect Logo" class="h-20 w-auto">
                 </div>
             </div>
             
@@ -763,7 +761,7 @@ if ($isLoggedIn) {
 </nav>
 
     <!-- Properties Section -->
-    <section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800 mt-16">
+    <section id="properties" class="py-16 bg-gradient-to-br from-slate-900 to-slate-800 mt-20">
         <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12">
                 <h2 class="text-4xl font-bold text-black mb-3">Available Properties</h2>
@@ -1048,8 +1046,7 @@ if ($isLoggedIn) {
                 <!-- Company Info -->
                 <div class="col-span-1 md:col-span-2">
                     <div class="flex items-center mb-4">
-                        <h1 class="text-2xl font-bold text-white">EasyRent</h1>
-                        <p class="text-xs text-blue-200 ml-2">Property Management</p>
+                        <img src="logo.png" alt="L&T Connect Logo" class="h-20 w-auto">
                     </div>
                     <p class="text-gray-300 mb-4">
                         Professional property management solutions for landlords and tenants. Making rental processes simple and efficient.
@@ -1097,7 +1094,7 @@ if ($isLoggedIn) {
             <div class="border-t border-gray-700 mt-8 pt-8">
                 <div class="flex flex-col md:flex-row justify-between items-center">
                     <p class="text-gray-400 text-sm">
-                        &copy; <?php echo date('Y'); ?> EasyRent. All rights reserved.
+                        &copy; <?php echo date('Y'); ?> L&T Connect. All rights reserved.
                     </p>
                     <div class="flex space-x-6 mt-4 md:mt-0">
                         <a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Privacy Policy</a>
