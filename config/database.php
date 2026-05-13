@@ -5,11 +5,18 @@
  */
 
 class Database {
-    private $host = 'localhost';
-    private $db_name = 'easyrent_db';
-    private $username = 'root'; // Change this to your database username
-    private $password = '';     // Change this to your database password
+    private $host;
+    private $db_name;
+    private $username;
+    private $password;
     private $conn;
+
+    public function __construct() {
+        $this->host = getenv('DB_HOST') ?: 'localhost';
+        $this->db_name = getenv('DB_NAME') ?: 'easyrent_db';
+        $this->username = getenv('DB_USER') ?: 'root';
+        $this->password = getenv('DB_PASS') ?: '';
+    }
 
     public function getConnection() {
         $this->conn = null;
