@@ -114,7 +114,7 @@ function fileExists($path) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($property['title'] ?? 'Property Details'); ?> - EasyRent</title>
+    <title><?php echo htmlspecialchars($property['title'] ?? 'Property Details'); ?> - L&T Connect</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -865,7 +865,7 @@ function fileExists($path) {
     <div id="mobileNavContainer" class="mobile-nav-container">
         <div class="mobile-nav-header">
             <div>
-                <h1 class="text-xl font-bold text-gray-900">EasyRent</h1>
+                <img src="../logo.png" alt="L&T Connect" class="h-8 w-auto">
                 <p class="text-xs text-blue-600">Property Management</p>
             </div>
             <button onclick="closeMobileNav()" class="text-gray-700 hover:text-red-600 transition-colors">
@@ -913,9 +913,9 @@ function fileExists($path) {
             <div class="flex justify-between items-center h-16">
                 <!-- Logo -->
                 <div class="flex items-center">
-                    <a href="../index.php" class="flex items-center">
+                    <a href="../index.php" class="flex items-center gap-2">
+                        <img src="../logo.png" alt="L&T Connect" class="h-10 w-auto">
                         <div>
-                            <h1 class="text-2xl font-bold text-gray-900">EasyRent</h1>
                             <p class="text-xs text-blue-600">Property Management</p>
                         </div>
                     </a>
@@ -1707,9 +1707,9 @@ const images = <?php
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <!-- Company Info -->
                 <div class="col-span-1 md:col-span-2">
-                    <div class="flex items-center mb-4">
-                        <h1 class="text-2xl font-bold text-white">EasyRent</h1>
-                        <p class="text-xs text-blue-200 ml-2">Property Management</p>
+                    <div class="flex items-center mb-4 gap-2">
+                        <img src="../logo.png" alt="L&T Connect" class="h-10 w-auto">
+                        <p class="text-xs text-blue-200">Property Management</p>
                     </div>
                     <p class="text-gray-300 mb-4">
                         Professional property management solutions for landlords and tenants. Making rental processes simple and efficient.
@@ -1757,7 +1757,7 @@ const images = <?php
             <div class="border-t border-gray-700 mt-8 pt-8">
                 <div class="flex flex-col md:flex-row justify-between items-center">
                     <p class="text-gray-400 text-sm">
-                        &copy; <?php echo date('Y'); ?> EasyRent. All rights reserved.
+                        &copy; <?php echo date('Y'); ?> L&T Connect. All rights reserved.
                     </p>
                     <div class="flex space-x-6 mt-4 md:mt-0">
                         <a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Privacy Policy</a>

@@ -218,7 +218,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tenant Dashboard - Easy Rent</title>
+    <title>Tenant Dashboard - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -793,7 +793,7 @@ if ($has_applications_table && isset($_POST['apply_property'])) {
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="logo">
-            <h2><i class="fas fa-home"></i> EasyRent</h2>
+            <img src="../logo.png" alt="L&T Connect" style="max-height: 42px; width: auto; display: block; margin-bottom: 0.75rem;">
             <p>Tenant Portal</p>
         </div>
         <ul>

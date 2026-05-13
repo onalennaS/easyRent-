@@ -206,7 +206,7 @@ function formatCurrency($amount) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance - Easy Rent</title>
+    <title>Maintenance - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -1069,7 +1069,7 @@ function formatCurrency($amount) {
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="logo">
-            <h2>Easy Rent</h2>
+            <img src="../logo.png" alt="L&T Connect" style="max-height: 42px; width: auto; display: block; margin-bottom: 0.75rem;">
             <p>Landlord Portal</p>
         </div>
         <ul>

@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Settings - EasyRent</title>
+    <title>Account Settings - L&T Connect</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -445,8 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <header>
         <div class="container header-content">
             <div class="logo">
-                <i class="fas fa-home"></i>
-                <span>EasyRent</span>
+                <img src="logo.png" alt="L&T Connect" style="max-height: 40px; width: auto;">
             </div>
             <nav>
                 <ul>
@@ -660,7 +659,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <footer>
         <div class="container footer-content">
             <div class="copyright">
-                &copy; <?= date('Y') ?> EasyRent. All rights reserved.
+                &copy; <?= date('Y') ?> L&T Connect. All rights reserved.
             </div>
             <div class="social-links">
                 <a href="#"><i class="fab fa-facebook"></i></a>

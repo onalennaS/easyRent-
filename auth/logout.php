@@ -1,6 +1,6 @@
 <?php
 /**
- * Logout Handler - EasyRent
+ * Logout Handler - L&T Connect
  * Place this file in: auth/logout.php
  */
 

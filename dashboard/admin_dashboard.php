@@ -288,7 +288,7 @@ if ($has_status && isset($_POST['reject_property'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Easy Rent</title>
+    <title>Admin Dashboard - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -702,7 +702,7 @@ if ($has_status && isset($_POST['reject_property'])) {
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="logo">
-            <h2>Easy Rent</h2>
+            <img src="../logo.png" alt="L&T Connect" style="max-height: 42px; width: auto; display: block; margin-bottom: 0.75rem;">
             <p>Admin Panel</p>
         </div>
         <ul>

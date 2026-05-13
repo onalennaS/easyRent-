@@ -1,6 +1,6 @@
 <?php
 /**
- * Database Configuration for EasyRent
+ * Database Configuration for L&T Connect
  * Place this file in: config/database.php
  */
 

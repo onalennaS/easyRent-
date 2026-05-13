@@ -82,7 +82,7 @@ if (isset($_GET['edit'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lease Templates - Easy Rent</title>
+    <title>Lease Templates - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -469,8 +469,7 @@ if (isset($_GET['edit'])) {
     <nav class="top-nav">
         <div class="nav-container">
             <div class="logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
+                <img src="../logo.png" alt="L&T Connect" style="max-height: 36px; width: auto;">
             </div>
             
             <ul class="nav-menu">

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Register - EasyRent</title>
+  <title>Register - L&T Connect</title>
   <link
     href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"
     rel="stylesheet"
@@ -143,9 +143,12 @@
 </head>
 <body>
   <div class="glass-card">
+    <div class="text-center mb-4">
+      <img src="../logo.png" alt="L&T Connect" class="w-20 h-20 object-contain mx-auto mb-4" />
+    </div>
     <div class="text-center mb-6">
       <h1 class="text-3xl font-bold">Create Account</h1>
-      <p class="text-blue-200 text-sm mt-2">Join EasyRent today</p>
+      <p class="text-blue-200 text-sm mt-2">Join L&T Connect today</p>
     </div>
 
     <div id="error" class="error-message">

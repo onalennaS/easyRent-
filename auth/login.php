@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Login - EasyRent</title>
+  <title>Login - L&T Connect</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
   <style>
@@ -56,11 +56,9 @@
 <body class="min-h-screen flex items-center justify-center p-4">
   <div class="relative z-10 w-full max-w-md">
     <div class="glass-card rounded-3xl p-8 shadow-2xl">
-      <div class="flex items-center mb-6 space-x-4">
-        <div>
-          <h1 class="text-4xl font-bold text-white mb-2 tracking-wide">EasyRent</h1>
-          <p class="text-blue-100 text-lg">Find your perfect home</p>
-        </div>
+      <div class="flex flex-col items-center mb-6 text-center">
+        <img src="../logo.png" alt="L&T Connect" class="w-24 h-24 object-contain mb-4" />
+        <p class="text-blue-100 text-lg">Find your perfect home</p>
       </div>
 
       <div id="error-message" class="hidden bg-red-500 bg-opacity-20 border border-red-500 text-red-100 p-4 mb-6 rounded-xl">
@@ -115,7 +113,7 @@
             <div class="w-full border-t border-gray-400 opacity-30"></div>
           </div>
           <div class="relative flex justify-center text-sm">
-            <span class="px-4 bg-transparent text-gray-300">New to EasyRent?</span>
+            <span class="px-4 bg-transparent text-gray-300">New to L&T Connect?</span>
           </div>
         </div>
 
@@ -131,7 +129,7 @@
     </div>
 
     <div class="text-center mt-8">
-      <p class="text-blue-100 text-sm">© 2025 EasyRent. Making property rental simple and secure.</p>
+      <p class="text-blue-100 text-sm">© 2025 L&T Connect. Making property rental simple and secure.</p>
     </div>
   </div>
 

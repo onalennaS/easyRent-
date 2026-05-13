@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rental Applications - Easy Rent</title>
+    <title>Rental Applications - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -524,8 +524,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
     <nav class="top-nav">
         <div class="nav-container">
             <div class="logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
+                <img src="../logo.png" alt="L&T Connect" style="max-height: 36px; width: auto;">
             </div>
             
             <ul class="nav-menu">

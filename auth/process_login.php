@@ -1,6 +1,6 @@
 <?php
 /**
- * Process Login - EasyRent
+ * Process Login - L&T Connect
  * Place this file in: auth/process_login.php
  */
 

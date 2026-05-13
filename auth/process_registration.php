@@ -1,6 +1,6 @@
 <?php
 /**
- * Process Registration - EasyRent
+ * Process Registration - L&T Connect
  * Place this file in: auth/process_registration.php
  */
 
