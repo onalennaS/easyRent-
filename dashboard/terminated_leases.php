@@ -62,7 +62,7 @@ if ($terminated_result) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminated Leases - EasyRent</title>
+    <title>Terminated Leases - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -433,8 +433,7 @@ if ($terminated_result) {
     <aside class="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">
-                <i class="fas fa-home"></i>
-                Easy Rent
+                <img src="../logo.png" alt="L&T Connect" style="max-height: 40px; width: auto;">
             </div>
         </div>
         

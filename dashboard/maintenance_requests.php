@@ -169,7 +169,7 @@ $properties_result = mysqli_query($conn, $properties_query);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Requests - EasyRent</title>
+    <title>Maintenance Requests - L&T Connect</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -1059,7 +1059,7 @@ $properties_result = mysqli_query($conn, $properties_query);
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="logo">
-            <h2><i class="fas fa-home"></i> EasyRent</h2>
+            <img src="../logo.png" alt="L&T Connect" style="max-height: 42px; width: auto; display: block; margin-bottom: 0.75rem;">
             <p>Tenant Portal</p>
         </div>
         <ul class="nav-links">
